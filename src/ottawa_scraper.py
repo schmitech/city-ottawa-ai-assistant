@@ -236,12 +236,12 @@ def create_modelfile(output_dir: str = 'ottawa_data') -> None:
         FROM mistral
 
         # Optimized parameters for precise and reliable information retrieval
-        PARAMETER temperature 0.3
-        PARAMETER top_k 50
-        PARAMETER top_p 0.9
-        PARAMETER repeat_penalty 1.1
-        PARAMETER num_ctx 4096
-        PARAMETER num_thread 8
+        PARAMETER temperature 0.3  # Controls randomness (0.0=deterministic, 1.0=creative)
+        PARAMETER top_k 50        # Consider top 50 tokens for each prediction step
+        PARAMETER top_p 0.9       # Choose from tokens covering 90% probability mass
+        PARAMETER repeat_penalty 1.1  # Penalize repeated content (1.0=no penalty)
+        PARAMETER num_ctx 4096    # Context window size (4k tokens for history+response)
+        PARAMETER num_thread 8    # Use 8 CPU threads for parallel processing
 
         # System prompt optimized for a City of Ottawa assistant
         SYSTEM """You are OttawaGPT, a trusted AI assistant dedicated to providing accurate and official information 
@@ -268,11 +268,7 @@ def create_modelfile(output_dir: str = 'ottawa_data') -> None:
         TEMPLATE """{{ .System }}
 
         User: {{ .Prompt }}
-        Assistant: I'm here to help you navigate City of Ottawa services and information.
-
-        {{ .Response }}
-
-        Would you like more details or further clarification on this topic?"""
+        Assistant: {{ .Response }}"""
         '''
     
     with open(modelfile_path, 'w', encoding='utf-8') as f:

@@ -1,4 +1,4 @@
-# Ottawa AI Assistant PoC
+# City ofOttawa AI Assistant PoC
 
 This project creates an AI-powered assistant for the City of Ottawa's website using web scraping and Mistral AI. The assistant helps citizens quickly find information without having to browse through multiple pages.
 
@@ -33,7 +33,7 @@ ottawa-ai-assistant/
 
 1. Clone the repository:
 ```bash
-git clone [your-repo-url]
+git clone https://github.com/schmitech/city-ottawa-ai-assistant.git
 cd ottawa-ai-assistant
 ```
 
