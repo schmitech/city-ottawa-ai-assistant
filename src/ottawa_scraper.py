@@ -205,22 +205,18 @@ class OttawaSiteScraper:
             # Create training examples
             for chunk in content_chunks:
                 if len(chunk.strip()) > 100:  # Ignore very small chunks
-                    # Create multiple training examples with different prompt patterns
-                    examples = [
-                        {
-                            "input": f"What information can you provide about {item['title']}?",
-                            "output": f"{summary}{chunk}"
-                        },
-                        {
-                            "input": f"Tell me about {item['title']}.",
-                            "output": f"{summary}{chunk}"
-                        },
-                        {
-                            "input": "What services does the City of Ottawa provide in this area?",
-                            "output": f"{summary}{chunk}"
-                        }
-                    ]
-                    training_data.extend(examples)
+                    training_data.append({
+                        "input": f"What information can you provide about {item['title']}?",
+                        "output": f"{summary}{chunk}"
+                    })
+                    training_data.append({
+                        "input": f"Tell me about {item['title']}.",
+                        "output": f"{summary}{chunk}"
+                    })
+                    training_data.append({
+                        "input": "What services does the City of Ottawa provide in this area?",
+                        "output": f"{summary}{chunk}"
+                    })
         
         # Save training data
         with open(f'{output_dir}/training_data.json', 'w', encoding='utf-8') as f:
@@ -236,39 +232,70 @@ def create_modelfile(output_dir: str = 'ottawa_data') -> None:
         FROM mistral
 
         # Optimized parameters for precise and reliable information retrieval
-        PARAMETER temperature 0.3  # Controls randomness (0.0=deterministic, 1.0=creative)
-        PARAMETER top_k 50        # Consider top 50 tokens for each prediction step
-        PARAMETER top_p 0.9       # Choose from tokens covering 90% probability mass
-        PARAMETER repeat_penalty 1.1  # Penalize repeated content (1.0=no penalty)
-        PARAMETER num_ctx 4096    # Context window size (4k tokens for history+response)
-        PARAMETER num_thread 8    # Use 8 CPU threads for parallel processing
+        PARAMETER temperature 0.3
+        PARAMETER top_k 50
+        PARAMETER top_p 0.9
+        PARAMETER repeat_penalty 1.1
+        PARAMETER num_ctx 4096
+        PARAMETER num_thread 8
 
         # System prompt optimized for a City of Ottawa assistant
         SYSTEM """You are OttawaGPT, a trusted AI assistant dedicated to providing accurate and official information 
-        about City of Ottawa services and programs. Your responses must be:
-        1. Fact-based and derived from verified City of Ottawa data.
-        2. Clear, concise, and free of unnecessary technical jargon.
-        3. Sensitive to bilingual (English and French) needs, noting when services are available in both languages.
-        4. Professional, yet approachable in tone.
-        5. Only include URLs that you are absolutely certain exist and are valid.
+        about City of Ottawa services and programs. Follow these guidelines strictly:
 
-        Important URL guidelines:
-        - Only use URLs that appear in your training data
-        - The main website is https://ottawa.ca/en/ for English content
-        - French content uses https://ottawa.ca/fr/
-        - Never construct URLs - only use complete URLs from your training data
-        - If unsure about a URL, direct users to https://ottawa.ca/en/ instead
+        RESPONSE STRUCTURE:
+        1. Start with the most relevant information first
+        2. Use bullet points for lists of services or steps
+        3. Include relevant fees, hours, or deadlines when available
+        4. End with contact information or next steps
+        5. Keep responses concise but complete
 
-        If you are ever uncertain about an answer:
-        - Clearly acknowledge the uncertainty
-        - Direct users to the main website: https://ottawa.ca/en/
-        - Suggest contacting 3-1-1 for the most current information"""
+        ACCURACY REQUIREMENTS:
+        1. Only provide information directly from official City of Ottawa sources
+        2. Include specific details: addresses, phone numbers, hours, fees
+        3. State when information might be subject to change
+        4. Mention seasonal variations in services when applicable
+        5. Include service numbers (311) when appropriate
+
+        LANGUAGE AND TONE:
+        1. Use clear, simple language avoiding bureaucratic terms
+        2. Be professional yet approachable
+        3. Maintain consistent bilingual awareness
+        4. Use active voice for instructions
+        5. Format numbers and dates consistently (e.g., "$50.00", "January 1, 2024")
+
+        URL GUIDELINES:
+        1. Only use URLs that appear in your training data
+        2. English content: https://ottawa.ca/en/
+        3. French content: https://ottawa.ca/fr/
+        4. Never modify or construct URLs
+        5. Default to main website if unsure: https://ottawa.ca/en/
+
+        CONTACT INFORMATION:
+        1. General inquiries: 3-1-1
+        2. Emergency services: 9-1-1
+        3. TTY: 613-580-2401
+        4. Toll-free: 1-866-261-9799
+
+        UNCERTAINTY HANDLING:
+        1. Clearly state when information is uncertain
+        2. Provide the most recent known information with date if possible
+        3. Direct to appropriate contact channels
+        4. Suggest alternatives or workarounds
+        5. Always include how to get the most up-to-date information
+
+        SEASONAL CONSIDERATIONS:
+        1. Mention if services vary by season
+        2. Include weather-dependent conditions
+        3. Note holiday schedule changes
+        4. Reference seasonal programs and deadlines
+        5. Include alternative services when seasonal ones are unavailable"""
 
         # Template for consistent, professional responses
         TEMPLATE """{{ .System }}
 
-        User: {{ .Prompt }}
-        Assistant: {{ .Response }}"""
+        Human: {{ .Prompt }}
+        Response: {{ .Response }}"""
         '''
     
     with open(modelfile_path, 'w', encoding='utf-8') as f:
@@ -279,7 +306,7 @@ def main():
     scraper = OttawaSiteScraper()
     
     print("Starting City of Ottawa website crawl...")
-    scraper.crawl(max_pages=100)  # Adjust max_pages as needed
+    scraper.crawl(max_pages=200)  # Adjust max_pages as needed
     
     print("Processing and saving content...")
     scraper.save_content()

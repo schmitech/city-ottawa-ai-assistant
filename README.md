@@ -1,6 +1,49 @@
-# City ofOttawa AI Assistant PoC
+# City of Ottawa AI Assistant PoC
 
 This project creates an AI-powered assistant for the City of Ottawa's website using web scraping and Mistral AI. The assistant helps citizens quickly find information without having to browse through multiple pages.
+
+## Diagram
+
+```mermaid
+sequenceDiagram
+    participant Main
+    participant OttawaSiteScraper
+    participant BeautifulSoup
+    participant Requests
+    participant FileSystem
+    
+    Main->>OttawaSiteScraper: create(base_url="https://ottawa.ca")
+    OttawaSiteScraper->>OttawaSiteScraper: init tokenizer & session
+    
+    Main->>OttawaSiteScraper: crawl(max_pages=100)
+    activate OttawaSiteScraper
+    
+    loop For each unvisited URL (max 100 pages)
+        OttawaSiteScraper->>Requests: GET url
+        Requests-->>OttawaSiteScraper: response
+        
+        OttawaSiteScraper->>BeautifulSoup: parse(response)
+        BeautifulSoup-->>OttawaSiteScraper: soup
+        
+        OttawaSiteScraper->>OttawaSiteScraper: extract_page_content()
+        OttawaSiteScraper->>OttawaSiteScraper: clean_text()
+        OttawaSiteScraper->>OttawaSiteScraper: chunk_content()
+    end
+    deactivate OttawaSiteScraper
+    
+    Main->>OttawaSiteScraper: save_content()
+    activate OttawaSiteScraper
+    
+    OttawaSiteScraper->>FileSystem: save content.json
+    OttawaSiteScraper->>FileSystem: save metadata.csv
+    OttawaSiteScraper->>FileSystem: save training_data.json
+    deactivate OttawaSiteScraper
+    
+    Main->>FileSystem: create_modelfile()
+    FileSystem-->>Main: Modelfile created
+    
+    Note over Main: Setup Complete
+```
 
 ## Features
 
@@ -51,7 +94,15 @@ source venv/bin/activate
 
 3. Install dependencies:
 ```bash
-pip install -r requirements.txt
+python -m pip install -r requirements.txt tiktoken
+```
+
+### Troubleshooting Installation
+
+If you encounter installation issues, try upgrading pip first:
+```bash
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt tiktoken
 ```
 
 ## Usage
