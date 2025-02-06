@@ -12,40 +12,59 @@ import tiktoken
 import hashlib
 import urllib3
 import time
+import yaml
+from queue import PriorityQueue
+import random
+from urllib.robotparser import RobotFileParser
 
 class OttawaSiteScraper:
-    def __init__(self, base_url="https://ottawa.ca"):
-        self.base_url = base_url
+    def __init__(self, config_path="config.yaml"):
+        # Load configuration
+        with open(config_path, 'r') as f:
+            self.config = yaml.safe_load(f)
+        
+        self.base_url = self.config['scraper']['base_url']
         self.visited_urls = set()
         self.content_data = []
         self.session = requests.Session()
         # Add SSL verification handling
-        self.session.verify = False
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        self.session.verify = self.config['scraper']['verify_ssl']
+        
+        if not self.session.verify:
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         
         # Add error handling for tokenizer
         try:
-            self.tokenizer = tiktoken.get_encoding("cl100k_base")
+            self.tokenizer = tiktoken.get_encoding(self.config['content']['tokenizer'])
         except Exception as e:
             print(f"Error initializing tokenizer: {e}")
             self.tokenizer = None
         
+        # Add request headers
+        self.session.headers.update({
+            'User-Agent': self.config['scraper']['user_agent'],
+            'Accept-Language': 'en-CA, fr-CA;q=0.8',
+            'From': 'your-email@example.com',
+            'Accept-Encoding': 'gzip',  # Reduce bandwidth
+            'Connection': 'keep-alive',  # Reuse connections
+        })
+        
     def is_valid_url(self, url: str) -> bool:
         """Check if URL is valid and belongs to ottawa.ca domain."""
         parsed = urlparse(url)
-        excluded_patterns = [
-            '.pdf', '.jpg', '.png', '.gif', '.jpeg', '.doc', '.docx',
-            'calendar', 'search', 'login', 'signin', 'signup',
-            '/fr/', '/fr-ca/', 'mailto:', 'tel:', 'javascript:'
-        ]
         return (
-            parsed.netloc.endswith('ottawa.ca') and
-            not any(pattern in url.lower() for pattern in excluded_patterns) and
-            not url.endswith(('.css', '.js', '.xml', '.rss'))
+            parsed.netloc in ['ottawa.ca', 'www.ottawa.ca'] and  # Only allow main domain
+            not any(p in url.lower() for p in self.config['content']['excluded_patterns']) and
+            not url.endswith(('.css', '.js', '.xml', '.rss')) and
+            not re.search(r'(/\w{2}_[A-Z]{2}/|locale=\w{2}_[A-Z]{2})', url) and
+            not re.search(r'/form/|/pay-or-purchase', parsed.path)  # Block form and payment paths
         )
     
     def clean_text(self, text: str) -> str:
-        """Clean and normalize text content."""
+        """Clean and normalize text content with null handling."""
+        if not text:  # Handle None or empty input
+            return ''
+        
         # Remove extra whitespace and newlines
         text = re.sub(r'\s+', ' ', text).strip()
         # Remove special characters while preserving important punctuation
@@ -57,10 +76,21 @@ class OttawaSiteScraper:
     def extract_page_content(self, url: str) -> Dict:
         """Extract and structure content from a single page."""
         try:
-            # Add delay between requests
-            time.sleep(1)  # 1 second delay
+            # Add randomized delay with jitter
+            base_delay = self.config['scraper']['request_delay']
+            jitter = base_delay * self.config['scraper']['jitter']
+            actual_delay = base_delay * self.config['scraper']['politeness'] + random.uniform(-jitter, jitter)
+            time.sleep(max(0.5, actual_delay))  # Never less than 0.5s
             
-            response = self.session.get(url, timeout=10)
+            # Add retry logic
+            for attempt in range(self.config['scraper']['max_retries']):
+                response = self.session.get(url, timeout=self.config['scraper']['timeout'])
+                if response.status_code == 429:
+                    backoff = 2 ** attempt
+                    time.sleep(backoff)
+                    continue
+                break
+            
             if response.status_code != 200:
                 return None
             
@@ -75,9 +105,16 @@ class OttawaSiteScraper:
             if not main_content:
                 return None
             
-            # Extract structured data
-            title = soup.title.string if soup.title else ''
-            headings = [h.get_text().strip() for h in main_content.find_all(['h1', 'h2', 'h3'])]
+            # Extract structured data - handle None case
+            title_tag = soup.title
+            title = title_tag.get_text(strip=True) if title_tag else url  # Use URL as fallback title
+            
+            # Safely extract headings
+            headings = []
+            for h in main_content.find_all(['h1', 'h2', 'h3']):
+                heading_text = h.get_text(strip=True)
+                if heading_text:
+                    headings.append(heading_text)
             
             # Extract and clean content
             content = self.clean_text(main_content.get_text())
@@ -92,6 +129,14 @@ class OttawaSiteScraper:
             links = {urljoin(self.base_url, a['href']) for a in soup.find_all('a', href=True)}
             valid_links = {link for link in links if self.is_valid_url(link)}
             
+            # Detect pagination
+            pagination = soup.find('nav', {'aria-label': 'Pagination'})
+            if pagination:
+                for page_link in pagination.find_all('a', href=True):
+                    absolute_link = urljoin(self.base_url, page_link['href'])
+                    if self.is_valid_url(absolute_link):
+                        valid_links.add(absolute_link)
+            
             return {
                 'url': url,
                 'title': self.clean_text(title),
@@ -105,8 +150,9 @@ class OttawaSiteScraper:
             print(f"Error processing {url}: {str(e)}")
             return None
     
-    def chunk_content(self, text: str, max_tokens: int = 1000) -> List[str]:
+    def chunk_content(self, text: str) -> List[str]:
         """Split content into chunks of approximately max_tokens tokens."""
+        max_tokens = self.config['content']['max_tokens_per_chunk']
         tokens = self.tokenizer.encode(text)
         chunks = []
         current_chunk = []
@@ -132,40 +178,73 @@ class OttawaSiteScraper:
         
         return chunks
     
-    def crawl(self, max_pages: int = 100) -> None:
+    def link_priority(self, url: str) -> int:
+        priority = 1
+        if '/programs/' in url: priority = 3
+        if '/registration/' in url: priority = 5
+        if '/facilities/' in url: priority = 2
+        return priority
+    
+    def crawl(self) -> None:
         """Crawl the website and extract content."""
-        to_visit = {self.base_url}
-        failed_urls = set()  # Track failed URLs
+        max_pages = self.config['scraper']['max_pages']
+        max_workers = self.config['scraper']['max_workers']
+        to_visit = PriorityQueue()
+        failed_urls = set()
+        
+        # Seed the queue with initial URL
+        initial_priority = -self.link_priority(self.base_url)
+        to_visit.put((initial_priority, self.base_url))
+        
+        # Add failure threshold
+        max_consecutive_failures = 5
+        consecutive_failures = 0
         
         with tqdm(total=max_pages, desc="Crawling pages") as pbar:
-            while to_visit and len(self.visited_urls) < max_pages:
-                with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            while not to_visit.empty() and len(self.visited_urls) < max_pages:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                     futures = []
-                    for _ in range(min(5, len(to_visit))):
-                        if not to_visit:
+                    for _ in range(min(5, to_visit.qsize())):
+                        if to_visit.empty():
                             break
-                        url = to_visit.pop()
+                        _, url = to_visit.get()
                         if url not in self.visited_urls and url not in failed_urls:
                             futures.append(executor.submit(self.extract_page_content, url))
                     
                     for future in concurrent.futures.as_completed(futures):
                         result = future.result()
-                        if result:
-                            self.visited_urls.add(result['url'])
-                            self.content_data.append(result)
-                            to_visit.update(result['links'] - self.visited_urls - failed_urls)
-                            pbar.update(1)
+                        if result:  # First check if result exists
+                            if result['content'].strip():
+                                self.visited_urls.add(result['url'])
+                                self.content_data.append(result)
+                                for link in result['links']:
+                                    to_visit.put((-self.link_priority(link), link))
+                                pbar.update(1)
+                            else:
+                                print(f"Skipping empty page: {result['url']}")
+                                failed_urls.add(url)
                         else:
-                            failed_urls.add(url)  # Track failed URLs
+                            print(f"Failed to process URL: {url}")
+                            failed_urls.add(url)
                         
                         if len(self.visited_urls) >= max_pages:
+                            print(f"Reached max pages ({max_pages}). Stopping crawl.")
                             break
+                        
+                        if not result:
+                            consecutive_failures += 1
+                            if consecutive_failures >= max_consecutive_failures:
+                                print("Too many consecutive failures. Stopping crawl.")
+                                break
+                        else:
+                            consecutive_failures = 0
         
         if failed_urls:
             print(f"\nFailed to process {len(failed_urls)} URLs")
     
-    def save_content(self, output_dir: str = 'ottawa_data') -> None:
+    def save_content(self) -> None:
         """Save extracted content and prepare training data."""
+        output_dir = self.config['output']['directory']
         os.makedirs(output_dir, exist_ok=True)
         
         # Convert content data links from sets to lists for JSON serialization
@@ -176,7 +255,7 @@ class OttawaSiteScraper:
             serializable_content.append(item_copy)
         
         # Save raw content
-        with open(f'{output_dir}/content.json', 'w', encoding='utf-8') as f:
+        with open(f"{output_dir}/{self.config['output']['files']['content']}", 'w', encoding='utf-8') as f:
             json.dump(serializable_content, f, ensure_ascii=False, indent=2)
         
         # Create CSV with metadata
@@ -186,7 +265,7 @@ class OttawaSiteScraper:
             'meta_description': item['meta_description'],
             'content_length': len(item['content'])
         } for item in self.content_data])
-        df.to_csv(f'{output_dir}/metadata.csv', index=False)
+        df.to_csv(f"{output_dir}/{self.config['output']['files']['metadata']}", index=False)
         
         # Prepare training data for Mistral
         training_data = []
@@ -204,7 +283,7 @@ class OttawaSiteScraper:
             
             # Create training examples
             for chunk in content_chunks:
-                if len(chunk.strip()) > 100:  # Ignore very small chunks
+                if len(chunk.strip()) > self.config['content']['min_chunk_size']:  # Ignore very small chunks
                     training_data.append({
                         "input": f"What information can you provide about {item['title']}?",
                         "output": f"{summary}{chunk}"
@@ -219,130 +298,96 @@ class OttawaSiteScraper:
                     })
         
         # Save training data
-        with open(f'{output_dir}/training_data.json', 'w', encoding='utf-8') as f:
+        with open(f"{output_dir}/{self.config['output']['files']['training']}", 'w', encoding='utf-8') as f:
             json.dump(training_data, f, ensure_ascii=False, indent=2)
 
-def create_modelfile(output_dir: str = 'ottawa_data') -> None:
-    """Create a Modelfile for an Ollama custom model using the Mistral framework."""
-    # Ensure the output directory exists
+    def check_robots_txt(self):
+        robots_url = urljoin(self.base_url, "/robots.txt")
+        response = self.session.get(robots_url)
+        parser = RobotFileParser()
+        parser.parse(response.text.splitlines())
+        return parser
+
+    def adaptive_throttling(self, response):
+        remaining = int(response.headers.get('X-RateLimit-Remaining', 100))
+        if remaining < 10:
+            reset_time = int(response.headers.get('X-RateLimit-Reset', 60))
+            print(f"Approaching rate limit. Pausing for {reset_time} seconds")
+            time.sleep(reset_time + 5)
+
+def create_modelfile(config_path="config.yaml") -> None:
+    """Create a Modelfile for an Ollama custom model."""
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+    
+    output_dir = config['output']['directory']
     os.makedirs(output_dir, exist_ok=True)
-    modelfile_path = os.path.join(output_dir, 'Modelfile')
+    modelfile_path = os.path.join(output_dir, config['output']['files']['modelfile'])
 
-    modelfile_content = '''\
-        FROM mistral
+    # Load model configuration
+    base_model = config['model']['base_model']
+    print(f"\n[Model Configuration] Creating Modelfile for base model: {base_model}")
 
-        # Optimized parameters for precise and reliable information retrieval
-        PARAMETER temperature 0.3
-        PARAMETER top_k 50
-        PARAMETER top_p 0.9
-        PARAMETER repeat_penalty 1.1
-        PARAMETER num_ctx 4096
-        PARAMETER num_thread 8
+    # Load model instructions from file
+    instruction_file = config['model']['instruction_file']
+    try:
+        with open(instruction_file, 'r', encoding='utf-8') as f:
+            model_instructions = f.read()
+    except FileNotFoundError:
+        print(f"Error: Model instruction file not found: {instruction_file}")
+        return
+    except Exception as e:
+        print(f"Error reading model instruction file: {e}")
+        return
 
-        # System prompt optimized for a City of Ottawa assistant
-        SYSTEM """You are OttawaGPT, a trusted AI assistant dedicated to providing accurate and official information 
-        about City of Ottawa services and programs. Follow these guidelines strictly:
+    model_params = config['model']['parameters'].get(base_model, {})
+    
+    # Build parameter string based on available parameters
+    parameter_str = ""
+    for param, value in model_params.items():
+        parameter_str += f"PARAMETER {param} {value}\n        "
 
-        RESPONSE STRUCTURE:
-        1. Start with the most relevant information first
-        2. Use bullet points for lists of services or steps
-        3. Include relevant fees, hours, or deadlines when available
-        4. End with contact information or next steps
-        5. Keep responses concise but complete
+    # Fix the template string formatting by removing leading whitespace
+    modelfile_content = f'''FROM {base_model}
 
-        ACCURACY REQUIREMENTS:
-        1. Only provide information directly from official City of Ottawa sources
-        2. Include specific details: addresses, phone numbers, hours, fees
-        3. State when information might be subject to change
-        4. Mention seasonal variations in services when applicable
-        5. Include service numbers (311) when appropriate
+# Model-specific parameters
+{parameter_str}
 
-        LANGUAGE AND TONE:
-        1. Use clear, simple language avoiding bureaucratic terms
-        2. Be professional yet approachable
-        3. Maintain consistent bilingual awareness
-        4. Use active voice for instructions
-        5. Format numbers and dates consistently (e.g., "$50.00", "January 1, 2024")
-
-        URL GUIDELINES:
-        1. Only use URLs that appear in your training data
-        2. English content: https://ottawa.ca/en/
-        3. French content: https://ottawa.ca/fr/
-        4. Never modify or construct URLs
-        5. Default to main website if unsure: https://ottawa.ca/en/
-
-        CONTACT INFORMATION:
-        1. General inquiries: 3-1-1
-        2. Emergency services: 9-1-1
-        3. TTY: 613-580-2401
-        4. Toll-free: 1-866-261-9799
-
-        UNCERTAINTY HANDLING:
-        1. Clearly state when information is uncertain
-        2. Provide the most recent known information with date if possible
-        3. Direct to appropriate contact channels
-        4. Suggest alternatives or workarounds
-        5. Always include how to get the most up-to-date information
-
-        SEASONAL CONSIDERATIONS:
-        1. Mention if services vary by season
-        2. Include weather-dependent conditions
-        3. Note holiday schedule changes
-        4. Reference seasonal programs and deadlines
-        5. Include alternative services when seasonal ones are unavailable"""
-
-        # Template for consistent, professional responses
-        TEMPLATE """{{ .System }}
-
-        Human: {{ .Prompt }}
-        Response: {{ .Response }}"""
-        '''
+{model_instructions}
+'''  # Removed leading whitespace in the template
     
     with open(modelfile_path, 'w', encoding='utf-8') as f:
         f.write(modelfile_content)
 
 def main():
+    config_path = "config.yaml"
+    
     # Initialize scraper
-    scraper = OttawaSiteScraper()
+    scraper = OttawaSiteScraper(config_path)
+    
+    # Verify robots.txt first
+    robots = scraper.check_robots_txt()
+    if not robots.can_fetch(scraper.config['scraper']['user_agent'], scraper.base_url):
+        print(f"ERROR: Cannot crawl {scraper.base_url} per robots.txt")
+        return
     
     print("Starting City of Ottawa website crawl...")
-    scraper.crawl(max_pages=200)  # Adjust max_pages as needed
+    scraper.crawl()
     
     print("Processing and saving content...")
     scraper.save_content()
     
-    print("Creating Modelfile for Mistral...")
-    create_modelfile()
+    print("Creating Modelfile...")
+    create_modelfile(config_path)
     
-    print("""
-PoC Setup Complete!
-
-Next steps:
-1. Review the extracted content:
-   - ottawa_data/content.json (raw data)
-   - ottawa_data/metadata.csv (site structure)
-   - ottawa_data/training_data.json (training examples)
-
-2. Build the custom Mistral model:
-   ollama create ottawa-assistant -f ottawa_data/Modelfile
-
-3. Set up the chat interface:
-   git clone https://github.com/schmitech/ollama-chat
-   cd ollama-chat
-   npm install
-   npm run dev
-
-Key improvements in this version:
-- Better content chunking using token-aware splitting
-- Enhanced metadata extraction and organization
-- Improved prompt engineering for Mistral
-- Bilingual service awareness
-- Professional response formatting
-- Comprehensive data cleaning and structuring
-
-The model will provide accurate, sourced information about City of Ottawa services
-with a professional yet approachable tone suitable for citizen interactions.
-""")
+    # Add final model confirmation
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+    print(f"\n=== Training Configuration ===")
+    print(f"Base Model: {config['model']['base_model']}")
+    print(f"Instruction File: {config['model']['instruction_file']}")
+    print(f"Parameters: {json.dumps(config['model']['parameters'][config['model']['base_model']], indent=2)}")
+    print("===============================")
 
 if __name__ == "__main__":
     main()

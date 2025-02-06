@@ -1,0 +1,89 @@
+scraper:
+  base_url: "https://ottawa.ca/en/parking-roads-and-travel/parking"
+  max_pages: 300
+  max_depth: 6
+  request_delay: 0.9
+  max_workers: 6
+  timeout: 15
+  verify_ssl: false
+  politeness: 1.0
+  user_agent: "OttawaServicesAIChatbot/1.0 (+https://github.com/schmitech)"
+  max_retries: 2
+  jitter: 0.5
+
+content:
+  tokenizer: "cl100k_base"
+  max_tokens_per_chunk: 1000
+  min_chunk_size: 100
+  excluded_patterns:
+    - "/city-jobs/"
+    - "/form/"
+    - "/pay-or-purchase"
+    - "/compliments"
+    - "/track-your-service-request"
+    - "/client-satisfaction-survey"
+    - ".pdf"
+    - ".jpg"
+    - ".png"
+    - ".gif"
+    - ".jpeg"
+    - ".doc"
+    - ".docx"
+    - "calendar"
+    - "search"
+    - "login"
+    - "signin"
+    - "signup"
+    - "/fr-ca/"
+    - "mailto:"
+    - "tel:"
+    - "javascript:"
+    - "print="
+    - "register.ottawa.ca"
+
+model:
+  base_model: "gemma2:2b"
+  instruction_file: "model-files/gemma2b.txt"
+  parameters:
+    mistral:latest:
+      temperature: 0.3
+      top_k: 50
+      top_p: 0.9
+      repeat_penalty: 1.1
+      num_ctx: 4096
+      num_thread: 8
+    gemma2:2b:
+      temperature: 0.2
+      top_p: 0.85
+      top_k: 30
+      repeat_penalty: 1.2
+      num_ctx: 3072
+      num_thread: 4
+      stop: ["\\n", "###", "Contact:", "French:"]
+      frequency_penalty: 1.1
+    llama2:
+      temperature: 0.7
+      top_p: 0.9
+      repeat_penalty: 1.1
+      num_ctx: 4096
+      num_predict: 256
+      stop: "</s>"
+    gemma:
+      temperature: 0.35
+      top_p: 0.9
+      num_ctx: 4096
+      stop: "<end_of_turn>"
+    falcon:
+      temperature: 0.4
+      top_p: 0.9
+      frequency_penalty: 1.1
+      presence_penalty: 1.0
+      num_ctx: 2048
+
+output:
+  directory: "ottawa_data"
+  files:
+    content: "content.json"
+    metadata: "metadata.csv"
+    training: "training_data.json"
+    modelfile: "Modelfile" 

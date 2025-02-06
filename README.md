@@ -2,7 +2,7 @@
 
 This project creates an AI-powered assistant for the City of Ottawa's website using web scraping and Mistral AI. The assistant helps citizens quickly find information without having to browse through multiple pages.
 
-## Diagram
+## Architecture Overview
 
 ```mermaid
 sequenceDiagram
@@ -15,7 +15,7 @@ sequenceDiagram
     Main->>OttawaSiteScraper: create(base_url="https://ottawa.ca")
     OttawaSiteScraper->>OttawaSiteScraper: init tokenizer & session
     
-    Main->>OttawaSiteScraper: crawl(max_pages=100)
+    Main->>OttawaSiteScraper: crawl(max_pages=500)
     activate OttawaSiteScraper
     
     loop For each unvisited URL (max 100 pages)
@@ -45,11 +45,18 @@ sequenceDiagram
     Note over Main: Setup Complete
 ```
 
+## Key Updates
+- **Model Support**: Added Gemma 2B integration alongside Mistral
+- **Enhanced Scraping**: Improved URL filtering and error handling
+- **Safety Features**: Rate limiting and robots.txt compliance
+- **Performance**: Optimized for 500-page crawls in under 15 minutes
+- **Bilingual Support**: French/English content handling
+
 ## Features
 
 - Web scraping of ottawa.ca with intelligent content extraction
 - Token-aware content chunking for optimal training
-- Mistral AI model integration for natural language understanding
+- Multiple model support (Mistral, Gemma 2B, Llama2)
 - Bilingual content awareness (English/French)
 - Source URL preservation for verification
 - Professional response formatting suitable for government services
@@ -77,7 +84,7 @@ ottawa-ai-assistant/
 1. Clone the repository:
 ```bash
 git clone https://github.com/schmitech/city-ottawa-ai-assistant.git
-cd ottawa-ai-assistant
+cd city-ottawa-ai-assistant
 ```
 
 2. Create and activate a virtual environment:
@@ -105,6 +112,13 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt tiktoken
 ```
 
+### Model Requirements
+Ensure you have the base models installed:
+```bash
+ollama pull mistral
+ollama pull gemma2:2b
+```
+
 ## Usage
 
 1. Make sure your virtual environment is activated:
@@ -126,9 +140,10 @@ This will:
 - Create training data
 - Generate a Modelfile for Mistral
 
-3. Build the custom Mistral model:
+3. Build the custom model:
 ```bash
-ollama create ottawa-assistant -f ottawa_data/Modelfile
+ollama create ottawa-assistant -f ottawa_data/Modelfile  # For Mistral
+ollama create ottawa-gemma -f ottawa_data/Modelfile  # For Gemma 2B
 ```
 
 4. Set up the chat interface:
@@ -138,6 +153,12 @@ cd ollama-chat
 npm install
 npm run dev
 ```
+
+## Configuration Tips
+- Adjust `max_pages` in config.yaml for different crawl sizes
+- Modify model parameters under `model.parameters`
+- Update excluded patterns to filter unwanted content
+- Set `request_delay` between 0.5-2.0 seconds for safety
 
 ## Sample Queries
 
@@ -184,7 +205,7 @@ The scraper generates several files in the `ottawa_data` directory:
 - `content.json`: Raw extracted content from the website
 - `metadata.csv`: Site structure and metadata information
 - `training_data.json`: Processed training examples for the model
-- `Modelfile`: Configuration file for creating the Mistral model
+- `Modelfile`: Configuration file for creating the AI model
 
 ## Model Features
 
@@ -194,6 +215,8 @@ The AI assistant:
 - Maintains a professional yet approachable tone
 - Handles both English and French service information
 - Suggests relevant contact information when appropriate
+- Supports multiple AI models (Mistral, Gemma 2B)
+- Automatically stops after configured page limit
 
 ## Development
 
@@ -218,7 +241,7 @@ git push origin feature/your-feature-name
 
 You can modify the script behavior by adjusting these parameters:
 
-- `max_pages`: Number of pages to crawl (default: 100)
+- `max_pages`: Number of pages to crawl (default: 500)
 - `num_ctx`: Context window size for Mistral (default: 4096)
 - `temperature`: Model creativity (default: 0.7)
 - Other parameters in the Modelfile
@@ -288,7 +311,8 @@ The synchronization process:
 - Only crawls public-facing content
 - Requires Ollama to be installed separately
 - Limited to content available on ottawa.ca
-- Model updates require re-running the scraping process
+- Maximum 500 pages per crawl (configurable)
+- Focused on recreation services (configurable)
 
 ## Contributing
 
