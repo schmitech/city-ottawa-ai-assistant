@@ -1,6 +1,6 @@
 scraper:
   base_url: "https://ottawa.ca/en/parking-roads-and-travel/parking"
-  max_pages: 100
+  max_pages: 50
   max_depth: 6
   request_delay: 0.9
   max_workers: 6
@@ -42,8 +42,8 @@ content:
     - "register.ottawa.ca"
 
 model:
-  base_model: "gemma2:9b"
-  instruction_file: "model-files/gemma9b.txt"
+  base_model: "gemma2:2b"
+  instruction_file: "model-files/gemma2.txt"
   parameters:
     temperature: 0.3
     top_k: 50
