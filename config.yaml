@@ -42,8 +42,8 @@ content:
     - "register.ottawa.ca"
 
 model:
-  base_model: "gemma2:2b"
-  instruction_file: "model-files/gemma2b.txt"
+  base_model: "gemma2:9b"
+  instruction_file: "model-files/Gemma9b.txt"
   parameters:
     mistral:latest:
       temperature: 0.3

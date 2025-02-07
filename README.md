@@ -142,8 +142,7 @@ This will:
 
 3. Build the custom model:
 ```bash
-ollama create ottawa-assistant -f ottawa_data/Modelfile  # For Mistral
-ollama create ottawa-gemma -f ottawa_data/Modelfile  # For Gemma 2B
+ollama create ottawa-gemma -f ottawa_data/Modelfile
 ```
 
 4. Set up the chat interface:
