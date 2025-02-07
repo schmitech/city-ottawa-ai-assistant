@@ -101,7 +101,7 @@ source venv/bin/activate
 
 3. Install dependencies:
 ```bash
-python -m pip install -r requirements.txt tiktoken
+python -m pip install -r requirements.txt
 ```
 
 ### Troubleshooting Installation
@@ -115,8 +115,7 @@ python -m pip install -r requirements.txt tiktoken
 ### Model Requirements
 Ensure you have the base models installed:
 ```bash
-ollama pull mistral
-ollama pull gemma2:2b
+ollama pull gemma2:9b
 ```
 
 ## Usage

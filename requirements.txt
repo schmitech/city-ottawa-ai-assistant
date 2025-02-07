@@ -4,3 +4,5 @@ pandas>=2.1.0
 tqdm>=4.66.0
 urllib3>=2.0.7
 pyyaml>=6.0.1
+spacy>=3.7.2
+tiktoken>=0.5.1

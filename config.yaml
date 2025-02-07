@@ -1,6 +1,6 @@
 scraper:
   base_url: "https://ottawa.ca/en/parking-roads-and-travel/parking"
-  max_pages: 10
+  max_pages: 100
   max_depth: 6
   request_delay: 0.9
   max_workers: 6
