@@ -101,15 +101,7 @@ source venv/bin/activate
 
 3. Install dependencies:
 ```bash
-python -m pip install -r requirements.txt
-```
-
-### Troubleshooting Installation
-
-If you encounter installation issues, try upgrading pip first:
-```bash
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt tiktoken
+pip install -r requirements.txt
 ```
 
 ### Model Requirements
