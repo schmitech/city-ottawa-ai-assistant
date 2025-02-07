@@ -1,6 +1,6 @@
 scraper:
   base_url: "https://ottawa.ca/en/parking-roads-and-travel/parking"
-  max_pages: 300
+  max_pages: 10
   max_depth: 6
   request_delay: 0.9
   max_workers: 6
@@ -43,42 +43,19 @@ content:
 
 model:
   base_model: "gemma2:9b"
-  instruction_file: "model-files/Gemma9b.txt"
+  instruction_file: "model-files/gemma9b.txt"
   parameters:
-    mistral:latest:
-      temperature: 0.3
-      top_k: 50
-      top_p: 0.9
-      repeat_penalty: 1.1
-      num_ctx: 4096
-      num_thread: 8
-    gemma2:2b:
-      temperature: 0.2
-      top_p: 0.85
-      top_k: 30
-      repeat_penalty: 1.2
-      num_ctx: 3072
-      num_thread: 4
-      stop: ["\\n", "###", "Contact:", "French:"]
-      frequency_penalty: 1.1
-    llama2:
-      temperature: 0.7
-      top_p: 0.9
-      repeat_penalty: 1.1
-      num_ctx: 4096
-      num_predict: 256
-      stop: "</s>"
-    gemma:
-      temperature: 0.35
-      top_p: 0.9
-      num_ctx: 4096
-      stop: "<end_of_turn>"
-    falcon:
-      temperature: 0.4
-      top_p: 0.9
-      frequency_penalty: 1.1
-      presence_penalty: 1.0
-      num_ctx: 2048
+    temperature: 0.3
+    top_k: 50
+    top_p: 0.9
+    repeat_penalty: 1.1
+    num_ctx: 4096
+    num_thread: 8
+  template: |
+    {{ if .System }}<|start_header_id|>system<|end_header_id|>
+    {{ .System }}<|eot_id|>{{ end }}{{ if .Prompt }}<|start_header_id|>user<|end_header_id|>
+    {{ .Prompt }}<|eot_id|>{{ end }}<|start_header_id|>assistant<|end_header_id|>
+    {{ .Response }}<|eot_id|>
 
 output:
   directory: "ottawa_data"

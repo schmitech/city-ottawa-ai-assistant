@@ -267,39 +267,155 @@ class OttawaSiteScraper:
         } for item in self.content_data])
         df.to_csv(f"{output_dir}/{self.config['output']['files']['metadata']}", index=False)
         
-        # Prepare training data for Mistral
+        # Prepare training data for model
         training_data = []
-        for item in self.content_data:
-            # Create a content summary
-            summary = f"Title: {item['title']}\n"
-            if item['meta_description']:
-                summary += f"Description: {item['meta_description']}\n"
-            if item['headings']:
-                summary += f"Topics: {' | '.join(item['headings'])}\n"
-            summary += f"Source: {item['url']}\n\n"
-            
-            # Split content into chunks
-            content_chunks = self.chunk_content(item['content'])
-            
-            # Create training examples
-            for chunk in content_chunks:
-                if len(chunk.strip()) > self.config['content']['min_chunk_size']:  # Ignore very small chunks
-                    training_data.append({
-                        "input": f"What information can you provide about {item['title']}?",
-                        "output": f"{summary}{chunk}"
-                    })
-                    training_data.append({
-                        "input": f"Tell me about {item['title']}.",
-                        "output": f"{summary}{chunk}"
-                    })
-                    training_data.append({
-                        "input": "What services does the City of Ottawa provide in this area?",
-                        "output": f"{summary}{chunk}"
-                    })
+        seen_chunks = set()  # To avoid duplicate content
         
-        # Save training data
-        with open(f"{output_dir}/{self.config['output']['files']['training']}", 'w', encoding='utf-8') as f:
-            json.dump(training_data, f, ensure_ascii=False, indent=2)
+        def clean_text(text):
+            """Clean and format text content."""
+            # Remove navigation elements
+            text = re.sub(r'On this page.*?\.\.\.', '', text, flags=re.DOTALL)
+            # Remove UI elements
+            text = re.sub(r'What you need.*?Apply', '', text, flags=re.DOTALL)
+            # Remove redundant whitespace
+            text = ' '.join(text.split())
+            # Remove navigation artifacts
+            text = re.sub(r'\.\.\.\s*$', '', text)
+            return text.strip()
+        
+        # Improved parking-related content detection
+        parking_keywords = {
+            'nouns': ['parking', 'permit', 'garage', 'lot', 'space', 'zone', 'meter', 'valet'],
+            'verbs': ['park', 'restrict', 'enforce', 'violate', 'ticket', 'tow'],
+            'adj': ['resident', 'timed', 'paid', 'restricted', 'accessible']
+        }
+        
+        # Enhanced instruction templates with variations
+        instruction_templates = {
+            'rates': [
+                "What are the parking rates for {location}?",
+                "How much does parking cost at {location}?",
+                "What are the fees for parking in {area}?"
+            ],
+            'hours': [
+                "What are the operating hours for {location} parking?",
+                "When is parking allowed at {location}?",
+                "What are the time restrictions for parking in {area}?"
+            ],
+            # ... other categories with similar variations
+        }
+
+        # Improved content chunk processing
+        for item in self.content_data:
+            # Enhanced parking content detection using combined criteria
+            content_lower = ' '.join([item['title'], item['meta_description'], ' '.join(item['headings'])]).lower()
+            is_parking_content = any(
+                re.search(rf'\b{term}\b', content_lower)
+                for term in parking_keywords['nouns'] + parking_keywords['verbs'] + parking_keywords['adj']
+            ) and not any(excl in content_lower for excl in ['event parking', 'special occasion'])
+
+            if not is_parking_content:
+                continue
+
+            # Initialize content_chunks for this item
+            content_chunks = []
+
+            # Improved chunking with sentence-aware splitting
+            sentences = re.split(r'(?<=[.!?])\s+', item['content'])
+            current_chunk = []
+            current_length = 0
+            
+            for sentence in sentences:
+                sentence_tokens = self.tokenizer.encode(sentence)
+                if current_length + len(sentence_tokens) > self.config['content']['max_tokens_per_chunk']:
+                    if current_chunk:
+                        chunk_text = ' '.join(current_chunk)
+                        chunk_text = clean_text(chunk_text)
+                        if len(chunk_text) >= self.config['content']['min_chunk_size']:
+                            content_chunks.append(chunk_text)
+                        current_chunk = []
+                        current_length = 0
+                current_chunk.append(sentence)
+                current_length += len(sentence_tokens)
+            
+            # Process remaining sentences
+            if current_chunk:
+                chunk_text = ' '.join(current_chunk)
+                chunk_text = clean_text(chunk_text)
+                if len(chunk_text) >= self.config['content']['min_chunk_size']:
+                    content_chunks.append(chunk_text)
+
+            # Enhanced information extraction with context awareness
+            for chunk in content_chunks:
+                # Improved cleaning with more specific patterns
+                chunk = re.sub(r'\b(?:Note:|Please note:|Important:).*$', '', chunk, flags=re.IGNORECASE)
+                chunk = re.sub(r'\d{3}-\d{3}-\d{4}', '[PHONE]', chunk)  # Redact phone numbers
+                chunk = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '[EMAIL]', chunk)
+                
+                if len(chunk) < self.config['content']['min_chunk_size']:
+                    continue
+
+                # Extract location context from headings
+                location_matches = re.findall(r'\b(?:downtown|centretown|byward market|west end|east end)\b', 
+                                            ' '.join(item['headings']), re.IGNORECASE)
+                location = location_matches[0].title() if location_matches else "this location"
+
+                # Create multiple question types per chunk with varied phrasing
+                category_found = False
+                
+                # Rate detection with currency validation
+                if re.search(r'\$(?:\d+\.?\d*|\.\d+)(?:\s*-\s*\$(?:\d+\.?\d*|\.\d+))?', chunk):
+                    template = random.choice(instruction_templates['rates'])
+                    training_data.append({
+                        "system": "You are a knowledgeable parking advisor for Ottawa. Provide detailed, accurate information about parking regulations and services.",
+                        "instruction": template.format(location=location, area=location),
+                        "response": chunk,
+                        "source_url": item['url'],
+                        "content_type": "rate_info"
+                    })
+                    category_found = True
+                
+                # Time detection with hour format validation
+                if re.search(r'\b(?:mon|tues|wednes|thurs|fri|satur|sun)day?s?\b.*?\d{1,2}(?::\d{2})?\s*[ap]\.?m?\.?', chunk, re.IGNORECASE):
+                    template = random.choice(instruction_templates['hours'])
+                    training_data.append({
+                        "system": "You are a knowledgeable parking advisor for Ottawa. Provide detailed, accurate information about parking regulations and services.",
+                        "instruction": template.format(location=location, area=location),
+                        "response": chunk,
+                        "source_url": item['url'],
+                        "content_type": "operating_hours"
+                    })
+                    category_found = True
+                
+                # Add fallback general parking question
+                if not category_found and is_parking_content:
+                    training_data.append({
+                        "system": "You are a knowledgeable parking advisor for Ottawa. Provide detailed, accurate information about parking regulations and services.",
+                        "instruction": f"What should I know about parking regulations in {location}?",
+                        "response": chunk,
+                        "source_url": item['url'],
+                        "content_type": "general_info"
+                    })
+
+        # Add data validation step
+        valid_training_data = []
+        seen_responses = set()
+        for entry in training_data:
+            response_hash = hashlib.md5(entry['response'].encode()).hexdigest()
+            if (len(entry['response']) >= 100 and 
+                response_hash not in seen_responses and
+                not re.search(r'\[\w+\]', entry['response'])):  # Filter redacted content
+                valid_training_data.append(entry)
+                seen_responses.add(response_hash)
+        
+        # Save validated data
+        training_file = f"{output_dir}/{self.config['output']['files']['training']}"
+        with open(training_file, 'w', encoding='utf-8') as f:
+            json.dump(valid_training_data, f, ensure_ascii=False, indent=2)
+        
+        print(f"\nProcessed {len(self.content_data)} pages")
+        print(f"Generated {len(valid_training_data)} validated instruction-response pairs")
+        print(f"Training data saved to {training_file}")
 
     def check_robots_txt(self):
         robots_url = urljoin(self.base_url, "/robots.txt")
@@ -314,50 +430,6 @@ class OttawaSiteScraper:
             reset_time = int(response.headers.get('X-RateLimit-Reset', 60))
             print(f"Approaching rate limit. Pausing for {reset_time} seconds")
             time.sleep(reset_time + 5)
-
-def create_modelfile(config_path="config.yaml") -> None:
-    """Create a Modelfile for an Ollama custom model."""
-    with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
-    
-    output_dir = config['output']['directory']
-    os.makedirs(output_dir, exist_ok=True)
-    modelfile_path = os.path.join(output_dir, config['output']['files']['modelfile'])
-
-    # Load model configuration
-    base_model = config['model']['base_model']
-    print(f"\n[Model Configuration] Creating Modelfile for base model: {base_model}")
-
-    # Load model instructions from file
-    instruction_file = config['model']['instruction_file']
-    try:
-        with open(instruction_file, 'r', encoding='utf-8') as f:
-            model_instructions = f.read()
-    except FileNotFoundError:
-        print(f"Error: Model instruction file not found: {instruction_file}")
-        return
-    except Exception as e:
-        print(f"Error reading model instruction file: {e}")
-        return
-
-    model_params = config['model']['parameters'].get(base_model, {})
-    
-    # Build parameter string based on available parameters
-    parameter_str = ""
-    for param, value in model_params.items():
-        parameter_str += f"PARAMETER {param} {value}\n        "
-
-    # Fix the template string formatting by removing leading whitespace
-    modelfile_content = f'''FROM {base_model}
-
-# Model-specific parameters
-{parameter_str}
-
-{model_instructions}
-'''  # Removed leading whitespace in the template
-    
-    with open(modelfile_path, 'w', encoding='utf-8') as f:
-        f.write(modelfile_content)
 
 def main():
     config_path = "config.yaml"
@@ -376,18 +448,6 @@ def main():
     
     print("Processing and saving content...")
     scraper.save_content()
-    
-    print("Creating Modelfile...")
-    create_modelfile(config_path)
-    
-    # Add final model confirmation
-    with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
-    print(f"\n=== Training Configuration ===")
-    print(f"Base Model: {config['model']['base_model']}")
-    print(f"Instruction File: {config['model']['instruction_file']}")
-    print(f"Parameters: {json.dumps(config['model']['parameters'][config['model']['base_model']], indent=2)}")
-    print("===============================")
 
 if __name__ == "__main__":
     main()
