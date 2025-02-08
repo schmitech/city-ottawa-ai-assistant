@@ -8,6 +8,7 @@ pyyaml==6.0.2
 spacy==3.8.4
 tiktoken==0.8.0
 playwright==1.41.0
+python-dotenv==1.0.1
 
 # Machine learning dependencies
 numpy==1.26.4
@@ -17,6 +18,7 @@ torch==2.2.2
 tensorboard==2.14.0
 accelerate==0.21.0
 scipy==1.13.0
+bitsandbytes>=0.41.1
 
 # Fine-tuning dependencies
 trl==0.7.11

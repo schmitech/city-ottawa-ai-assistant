@@ -83,3 +83,4 @@ onnx_model/
 export_model/
 export
 *.jsonl
+model_training.txt

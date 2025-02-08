@@ -5,7 +5,7 @@ from peft import PeftModel, PeftConfig
 def merge_lora_with_base():
     # Load the base model
     base_model = AutoModelForCausalLM.from_pretrained(
-        "facebook/opt-350m",
+        "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
         torch_dtype=torch.float32,
         low_cpu_mem_usage=True
     )
@@ -23,7 +23,7 @@ def merge_lora_with_base():
     merged_model.save_pretrained("./merged_model")
     
     # Save the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained("facebook/opt-350m")
+    tokenizer = AutoTokenizer.from_pretrained("TinyLlama/TinyLlama-1.1B-Chat-v1.0")
     tokenizer.save_pretrained("./merged_model")
     
     print("Model successfully merged and saved to ./merged_model")

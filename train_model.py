@@ -1,9 +1,11 @@
+import os
 import json
 from datasets import Dataset
 from transformers import TrainingArguments, AutoModelForCausalLM, AutoTokenizer, TrainerCallback
 from trl import SFTTrainer
 import torch
 from peft import LoraConfig, get_peft_model
+from huggingface_hub import login
 
 class PrintCallback(TrainerCallback):
     def on_step_end(self, args, state, control, **kwargs):
@@ -41,24 +43,26 @@ def prepare_dataset():
 
 def train():
     """Initialize and train the model."""
-    model_name = "facebook/opt-350m"
+    model_name = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
     
     print("Loading model and tokenizer...")
+    # Force CPU usage
+    device = "cpu"
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype=torch.float32,
         low_cpu_mem_usage=True,
+        device_map={"": device}  # Force CPU
     )
+    
     tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer.pad_token = tokenizer.eos_token
     
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-        model.config.pad_token_id = model.config.eos_token_id
-    
+    # Configure LoRA with smaller parameters
     peft_config = LoraConfig(
-        r=16,
-        lora_alpha=32,
-        target_modules=["q_proj", "v_proj"],
+        r=8,  # Reduced from 16
+        lora_alpha=16,  # Reduced from 32
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
         lora_dropout=0.05,
         bias="none",
         task_type="CAUSAL_LM"
@@ -72,8 +76,8 @@ def train():
         output_dir="./model_output",
         num_train_epochs=1,
         per_device_train_batch_size=1,
-        gradient_accumulation_steps=8,
-        warmup_steps=100,
+        gradient_accumulation_steps=4,  # Reduced from 8
+        warmup_steps=50,  # Reduced from 100
         logging_steps=1,
         learning_rate=2e-4,
         weight_decay=0.001,
@@ -85,10 +89,11 @@ def train():
         group_by_length=True,
         lr_scheduler_type="constant",
         save_strategy="steps",
-        save_steps=100,
+        save_steps=50,  # Reduced from 100
         report_to="none",
         log_level="info",
         logging_first_step=True,
+        no_cuda=True,  # Force CPU
     )
     
     trainer = SFTTrainer(

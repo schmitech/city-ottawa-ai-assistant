@@ -1,77 +1,1129 @@
 FROM mistral:latest
 
-# Set the model parameters
-PARAMETER temperature 0.7
-PARAMETER top_p 0.95
-PARAMETER top_k 40
+PARAMETER temperature 0
+PARAMETER top_p 0.1
+PARAMETER top_k 1
 PARAMETER repeat_penalty 1.1
+PARAMETER num_predict 100
+PARAMETER num_ctx 4096
+PARAMETER num_keep 24
+PARAMETER stop ["<|im_end|>", "</s>"]
 
-# Set the prompt template
-TEMPLATE """### Instruction: {{ .Prompt }}
+SYSTEM """You are the City of Ottawa's official information service. Your purpose is to provide accurate information from the official training data.
 
-### Response: """
+STRICT RULES:
+1. ONLY provide information that EXACTLY matches the training data
+2. If no exact match exists, respond: "I don't have that specific information. Please contact 3-1-1 or visit ottawa.ca for assistance."
+3. NEVER modify amounts, dates, times, or any other details
+4. NEVER combine information from different answers
+5. NEVER add explanations or suggestions
+6. NEVER create new information"""
 
-# Add model metadata
-SYSTEM """You are an AI assistant trained to help with information about City of Ottawa services, including business licenses, sports and fitness programs, and older adult activities. Provide accurate and helpful responses based on the official information."""
+TEMPLATE """<|im_start|>system
+{{ .System }}<|im_end|>
+<|im_start|>user
+{{ .Prompt }}<|im_end|>
+<|im_start|>assistant
+{{ .Response }}<|im_end|>
+"""
 
-# Define system instructions
-SYSTEM "You are an AI assistant trained to answer questions based on official City of Ottawa documentation. Provide accurate and concise responses. Use the provided training data to infer answers even if they are phrased slightly differently. If a question is entirely outside the scope of the training data, respond with 'I don't have that information.'"
+MESSAGE user "Where can I apply for a municipal business license?"
+MESSAGE assistant "You can apply using the business application form."
 
-# Example conversations for few-shot learning
-MESSAGE user "How much does it cost to use the tennis and pickleball courts?"
-MESSAGE assistant "According to the City of Ottawa documentation, the fees are: Adult: $10.10, Youth/child: $8.23, Commercial or private: $18.52."
+MESSAGE user "What is the annual cost for a clothing donation box permit?"
+MESSAGE assistant "The annual permit fee for a clothing donation box is $560, with an additional annual box fee of $150 per box."
 
-MESSAGE user "What is the Heart Wise Exercise program?"
-MESSAGE assistant "According to the City of Ottawa documentation: Heart Wise Exercise programs are physical activity courses or activities with low to moderate intensity. They are designed for individuals concerned about heart health and are also available to those without heart-related issues. The programs meet stringent cardiac fitness requirements and accept participants with a known history of cardiac disease, with physician approval if necessary."
+MESSAGE user "How much does it cost to register a replacement vehicle for a limousine service?"
+MESSAGE assistant "The fee to register a replacement vehicle is $57."
 
-MESSAGE user "How do I apply for a business licence in Ottawa?"
-MESSAGE assistant "To apply for a municipal business licence in Ottawa, your application may require inspection and approval by zoning, buildings, police, health, fire, and property standards staff. The Business Licensing Centre coordinates this process. Most licences can be issued within six weeks, but some may be issued within minutes."
+MESSAGE user "How much does it cost to obtain a host permit for two years?"
+MESSAGE assistant "A City-issued host permit for a principal residence costs $112 for two years."
 
-# Expanded Training Data with Variations
+MESSAGE user "Where can I submit my application for a short-term rental permit?"
+MESSAGE assistant "You can submit your application online or in person at the Business Licensing Centre at 735 Industrial Avenue, 2nd floor, Monday to Friday from 8:30 am to 4:15 pm."
 
-# Tennis and Pickleball Courts Fees
-MESSAGE user "What are the fees for tennis and pickleball courts?"
-MESSAGE assistant "According to the City of Ottawa documentation, the fees are: Adult: $10.10, Youth/child: $8.23, Commercial or private: $18.52."
+MESSAGE user "If I'm renting, what do I need to apply for a host permit?"
+MESSAGE assistant "If renting, you need proof of lease and written consent from the property owner for its use as a short-term rental."
 
-MESSAGE user "How much do I need to pay to book a pickleball court?"
-MESSAGE assistant "According to the City of Ottawa documentation, the fees are: Adult: $10.10, Youth/child: $8.23, Commercial or private: $18.52."
+MESSAGE user "Can a landlord prohibit short-term rentals?"
+MESSAGE assistant "Yes, a landlord may prohibit short-term rentals in their properties."
 
-MESSAGE user "Tell me the price for renting a tennis or pickleball court."
-MESSAGE assistant "According to the City of Ottawa documentation, the fees are: Adult: $10.10, Youth/child: $8.23, Commercial or private: $18.52."
+MESSAGE user "What is the maximum time a driver with a small business identity card permit can park in a 'No Parking Zone' for delivery purposes?"
+MESSAGE assistant "A driver with a small business identity card permit can park for up to 15 minutes in a 'No Parking Zone' for delivery, pick-up, or loading."
 
-# Heart Wise Exercise Program
-MESSAGE user "Tell me about the Heart Wise Exercise program."
-MESSAGE assistant "According to the City of Ottawa documentation: Heart Wise Exercise programs are physical activity courses or activities with low to moderate intensity. They are designed for individuals concerned about heart health and are also available to those without heart-related issues. The programs meet stringent cardiac fitness requirements and accept participants with a known history of cardiac disease, with physician approval if necessary."
+MESSAGE user "What is the purpose of a day care parking permit?"
+MESSAGE assistant "The day care parking permit is to provide a safe and convenient manner for day care users' drop-off and pick-up."
 
-MESSAGE user "What activities are included in Heart Wise Exercise?"
-MESSAGE assistant "According to the City of Ottawa documentation, Heart Wise Exercise programs include various low to moderate intensity physical activities."
+MESSAGE user "What is the special event parking permit typically for?"
+MESSAGE assistant "The special event parking permit is typically for infrequent not-for-profit or charitable events at locations such as schools, places of worship, and other institutions."
 
-# Winter Health and Fitness Week
-MESSAGE user "What activities are available during Winter Health and Fitness Week?"
-MESSAGE assistant "During Winter Health and Fitness Week, activities include outdoor rinks, sledding, cross-country skiing, walks in conservation areas, drop-in sports and fitness, indoor public skating, indoor public swimming and aquafit, and virtual Zumba® classes."
+MESSAGE user "What does the temporary consideration parking permit provide?"
+MESSAGE assistant "The temporary consideration parking permit provides short-term on-street parking privileges under special circumstances."
 
-# Free Fitness Pass - Try It
-MESSAGE user "How can I get a free fitness pass?"
-MESSAGE assistant "Visit a participating facility to sign up for a free 'Try It' fitness pass. No appointment is needed. The pass gives you three visits to participating facilities and must be used within 30 days."
+MESSAGE user "What is the purpose of the volunteer parking permit?"
+MESSAGE assistant "The volunteer parking permit is to provide special short-term parking privileges for drivers of charitable organizations for delivery and pick-up, including passenger services, in the downtown and business districts."
 
-MESSAGE user "What is the 'Try It' fitness pass?"
-MESSAGE assistant "The 'Try It' fitness pass allows you to visit participating facilities three times for free. It must be used within 30 days of activation."
+MESSAGE user "When does registration open for spring swimming activities?"
+MESSAGE assistant "Registration for spring swimming activities opens February 11 at 9 pm."
 
-# Business Licenses
-MESSAGE user "What businesses require a municipal licence in Ottawa?"
-MESSAGE assistant "Businesses that require a municipal licence in Ottawa include amusement places, auctioneers, exhibitions, flea markets, food premises, pet shops, public garages, rickshaws, salvage yards, second-hand goods shops, snow plow contractors, and tobacco and vapour product retailers."
+MESSAGE user "If I register my child for multiple summer camps, do I have to pay for them all at once?"
+MESSAGE assistant "No, if you register your child for multiple summer camps, the payments will be spaced out."
 
-MESSAGE user "What is the cost of a kennel licence in Ottawa?"
-MESSAGE assistant "The cost of a kennel licence in Ottawa is $184 for boarding and $90 annually for in-home and recreational categories. The licence expires annually on April 30."
+MESSAGE user "What are the rates for Before and After School Programs?"
+MESSAGE assistant "The rates for Before and After School Programs range from $8 to $14 per day."
 
-MESSAGE user "How much does a limousine service licence cost in Ottawa?"
-MESSAGE assistant "The licensing fee for a Limousine Service operator in Ottawa is $1,110. For each vehicle registered, the licensee must pay $667. Temporary limousine registration costs $123. Operator licences expire annually on August 31."
+MESSAGE user "When can I register for Fall swimming activities?"
+MESSAGE assistant "Registration for Fall swimming activities begins August 12 at 9 pm."
 
-MESSAGE user "What is the cost of a salvage yard licence in Ottawa?"
-MESSAGE assistant "A salvage yard licence in Ottawa costs $248 annually. This licence is non-transferable and expires annually on December 31."
+MESSAGE user "If I'm not an Ottawa resident, is there an extra charge for programs?"
+MESSAGE assistant "Yes, non-Ottawa residents will be charged an additional 25 percent per person per program or membership."
 
-MESSAGE user "How much does a second-hand goods shop licence cost in Ottawa?"
-MESSAGE assistant "A second-hand goods shop licence in Ottawa costs $241 annually. This licence is non-transferable and expires annually on March 31."
+MESSAGE user "If my credit has been on my account for over two years, will there be a fee to refund it?"
+MESSAGE assistant "Yes, the $15 processing fee will still apply to a refund of credits on your account for more than two years."
 
-MESSAGE user "What are the additional business licensing fees in Ottawa?"
-MESSAGE assistant "Additional business licensing fees in Ottawa include a late fee of $60, an ownership transfer fee of $52, a location transfer fee of $104, and a duplicate licence fee of $20." 
+MESSAGE user "What age is considered a 'child' for sports and fitness memberships?"
+MESSAGE assistant "A child is considered to be ages three to 12 years for sports and fitness memberships."
+
+MESSAGE user "What does an all-inclusive membership include?"
+MESSAGE assistant "An all-inclusive membership includes weight and cardio, aqua fitness, swimming, group fitness, squash and racquetball, indoor cycling, public skating, specialty skating and drop-in activities."
+
+MESSAGE user "What is the cost to rent a tennis court for an hour as an adult?"
+MESSAGE assistant "The rental rate for an adult to use a tennis court is $10.10."
+
+MESSAGE user "What age is considered 'youth' for membership purposes?"
+MESSAGE assistant "For membership purposes, youth are considered to be ages 13 to 17 years."
+
+MESSAGE user "How long are the children's Bike Rodeo sessions?"
+MESSAGE assistant "The City of Ottawa Bike Rodeos are two hours long."
+
+MESSAGE user "What kind of helmet is required for children 10 and under at City indoor arenas?"
+MESSAGE assistant "Children 10 and under must wear a CSA-certified hockey helmet at all City indoor arenas to be allowed on the ice."
+
+MESSAGE user "What is the maximum number of skaters allowed on puddle rinks?"
+MESSAGE assistant "There is a maximum capacity of 12 skaters on puddle rinks."
+
+MESSAGE user "If my child is 6 years old, do I need to supervise them at the outdoor rink?"
+MESSAGE assistant "Yes, children seven years and under must be actively supervised by a responsible person 14 years or older."
+
+MESSAGE user "Can I use a bicycle helmet for my child while ice skating at an indoor arena?"
+MESSAGE assistant "Bicycle helmets are not permitted for children 10 years of age and under."
+
+MESSAGE user "What types of activities can I register for?"
+MESSAGE assistant "You can register for swimming, dance, fitness, hobbies, theatre, and cycling."
+
+MESSAGE user "What length is the short mat bowling mat?"
+MESSAGE assistant "The short mat bowling mat is 40 to 45 feet long and 6 feet wide."
+
+MESSAGE user "How much does it cost for a senior to go public skating?"
+MESSAGE assistant "Drop-in public skating costs $3.10 for seniors."
+
+MESSAGE user "How long is the free fitness pass valid for?"
+MESSAGE assistant "The free fitness pass is valid for three visits within 30 days of the first use."
+
+MESSAGE user "Can you give me the phone number for the Abbotsford Seniors Centre?"
+MESSAGE assistant "The Abbotsford Senior Centre can be reached at 613-230-5730."
+
+MESSAGE user "How far in advance can I reserve a spot for drop-in swimming?"
+MESSAGE assistant "You can reserve a spot as of 6 pm for up to two days in advance."
+
+MESSAGE user "If I can't make my reserved swim time, how can I cancel?"
+MESSAGE assistant "You can find the cancellation link in your email confirmation or on the reservation landing page, or you can call the facility."
+
+MESSAGE user "What age do I have to be to go to the women's only swim?"
+MESSAGE assistant "The women's only swim is open to all women and girls, 14 years of age and older."
+
+MESSAGE user "What is the cost for an adult to go to aquafit?"
+MESSAGE assistant "The cost for adults to go to aquafit is $9.26."
+
+MESSAGE user "If I'm not sure about my swim level, what should I do?"
+MESSAGE assistant "You can do a swim assessment during a public swim, and a program supervisor will tell you which level best suits your ability."
+
+MESSAGE user "What will my child learn in the first Swim Creatures level, Mikinàk | Turtle 1?"
+MESSAGE assistant "Your child will learn how their body floats and moves through the water on their front and back, blow bubbles, and put their face in water; upon completion, they will be able to float and glide on their front independently."
+
+MESSAGE user "What distance can my child swim upon completion of the first level of the Swim Colours program?"
+MESSAGE assistant "Upon completion of the first level of Swim Colours, your child will be able to complete a distance swim of at least 5 metres."
+
+MESSAGE user "What is a prerequisite to taking the Bronze Cross certification?"
+MESSAGE assistant "To take the Bronze Cross certification, you need a Bronze Medallion and Emergency First Aid."
+
+MESSAGE user "What age must I be to take the Bronze Medallion course?"
+MESSAGE assistant "You must be 13-years-old by the date of the exam to take the Bronze Medallion course."
+
+MESSAGE user "How old do you have to be to take powerswim?"
+MESSAGE assistant "You must be 8 years of age to take powerswim."
+
+MESSAGE user "How much is a drop-in swim for a child at a standard pool in 2025?"
+MESSAGE assistant "In 2025, a drop-in swim for a child at a standard pool costs $2.85."
+
+MESSAGE user "How much is a 12-visit swim pass for an adult?"
+MESSAGE assistant "A 12-visit swim pass for adults costs $53.72."
+
+MESSAGE user "What does a swim membership include?"
+MESSAGE assistant "A swim membership provides access to scheduled drop-in public swims of all types, including lane, public, and preschool swims at any pool, but excludes wave swims."
+
+MESSAGE user "What age range is considered an adult for pool rental definitions?"
+MESSAGE assistant "Adults are defined as being between 19 and 64 years old."
+
+MESSAGE user "My team needs insurance to rent a pool, what is the minimum coverage amount required?"
+MESSAGE assistant "Teams must have valid insurance of a minimum $2 million inclusive per occurrence for bodily injury, death and damage to property."
+
+MESSAGE user "If I want to rent a pool during prime time on a weekday, what hours are considered?"
+MESSAGE assistant "Prime-time pool rental rates on weekdays are from 3 pm to 9 pm."
+
+MESSAGE user "What is the early payment cost to rent a full pool during non-prime time in 2025?"
+MESSAGE assistant "The early payment cost to rent a full pool during non-prime time in 2025 is $6821."
+
+MESSAGE user "If my hockey team is playing a non-contact game, does the City of Ottawa provide liability insurance?"
+MESSAGE assistant "Yes, the City of Ottawa's liability insurance program provides renters with third-party liability coverage for non-contact adult hockey games."
+
+MESSAGE user "How much does drop-in skating cost for adults in 2025?"
+MESSAGE assistant "For 2025, drop-in skating costs $3.10 for adults."
+
+MESSAGE user "Are taxes included in the listed skating fees?"
+MESSAGE assistant "No, the fees shown do not include HST, and applicable taxes will be added during the payment process."
+
+MESSAGE user "What is the yearly fee for a senior skating membership?"
+MESSAGE assistant "The yearly fee for a senior skating membership is $132.17."
+
+MESSAGE user "Where can I purchase a skating membership?"
+MESSAGE assistant "You can purchase a skating membership at several locations including Bob MacQuarrie Recreation Complex-Orl\u00e9ans, Brewer Pool and Arena, and Canterbury Recreation Complex."
+
+MESSAGE user "What age is considered a youth for drop-in skating fees?"
+MESSAGE assistant "Youth are between the ages of 13 and 17 years."
+
+MESSAGE user "Where can I find the drop-in skating schedules?"
+MESSAGE assistant "Check the drop-in schedules on the facility's page."
+
+MESSAGE user "How early should I arrive for my reserved skating session?"
+MESSAGE assistant "Please show up no more than 15 minutes prior to your reservation."
+
+MESSAGE user "What age must children be to be supervised on the ice?"
+MESSAGE assistant "All children 10 years of age and under must be actively supervised by a parent or guardian who is age 14 or older, whether on the ice or as a spectator."
+
+MESSAGE user "What kind of skates are required for speed skating?"
+MESSAGE assistant "Speed skates are mandatory for speed skating sessions."
+
+MESSAGE user "What is the cost for a child to participate in drop-in skating in 2025?"
+MESSAGE assistant "The drop-in fee for children, youth, students, adults and seniors is $3.10 in 2025."
+
+MESSAGE user "What is the minimum amount of insurance required for teams renting ice?"
+MESSAGE assistant "Teams renting ice must have valid insurance of a minimum $2 million inclusive per occurrence for bodily injury, death and damage to property."
+
+MESSAGE user "If I cancel my seasonal ice time 50 days before, what percentage will I be charged?"
+MESSAGE assistant "If you cancel your seasonal ice time 31 to 59 days before, you will be charged a 50% cancellation fee."
+
+MESSAGE user "If I want to book training ice time, how many hours must I book for?"
+MESSAGE assistant "For training ice time, you must book a minimum of two hours."
+
+MESSAGE user "How far in advance can I book last minute ice?"
+MESSAGE assistant "Last minute ice can be purchased for the same day or up to 15 days in advance of the rental date."
+
+MESSAGE user "What is considered daytime for parking permit regulations?"
+MESSAGE assistant "Daytime is defined as the period from 7 am to 7 pm of the same day."
+
+MESSAGE user "Where should I place my parking permit in my car?"
+MESSAGE assistant "The permit must be affixed to the lower inside of the windshield on the driver's side."
+
+MESSAGE user "How far away from the curb can I park with an accessible parking permit?"
+MESSAGE assistant "Permit holders cannot park more than 15 centimetres away from a curb."
+
+MESSAGE user "How long can a musician and artist loading permit allow a vehicle to be parked unattended?"
+MESSAGE assistant "The musician and artist loading permit allows vehicles to be left unattended for up to 15 minutes."
+
+MESSAGE user "How long does a tour bus parking permit last?"
+MESSAGE assistant "Each tour bus parking permit is valid for a maximum period of 24 consecutive hours."
+
+MESSAGE user "What is the main goal of the Canada-wide Early Learning and Child Care plan?"
+MESSAGE assistant "The goal is to reduce child care costs to an average of $10 per day for eligible families."
+
+MESSAGE user "By what percentage have child care rates been reduced since 2022 under the CWELCC system?"
+MESSAGE assistant "Rates have been reduced by 52.75% since 2022."
+
+MESSAGE user "When will the province reach its goal to reach an average fee of $10 a day?"
+MESSAGE assistant "The province aims to reach an average fee of $10 a day by 2025/2026."
+
+MESSAGE user "What email address can I use to contact Children's Services?"
+MESSAGE assistant "You can contact Children's Services at childrensservices@ottawa.ca."
+
+MESSAGE user "What age is my child required to be to qualify for a child care fee subsidy?"
+MESSAGE assistant "To qualify for a child care fee subsidy, your child must be 12 years old or younger."
+
+MESSAGE user "If I disagree with a decision regarding my child care fee subsidy, how long do I have to request an appeal?"
+MESSAGE assistant "You have 10 business days to request an appeal if you disagree with a decision about your child care fee subsidy application."
+
+MESSAGE user "What phone number can I call for questions about child care?"
+MESSAGE assistant "You can call 3-1-1 between 8:30 am and 4 pm and follow the prompts to be directed to child care services."
+
+MESSAGE user "What is the maximum daily fee for families participating in the CWELCC program?"
+MESSAGE assistant "The fees are capped at $22 per day for families/caregivers who participate in the CWELCC program."
+
+MESSAGE user "What should families do if their fee subsidy parental contribution is lower than $22 starting January 1, 2025?"
+MESSAGE assistant "Starting January 1, 2025, if a family's fee subsidy parental contribution is lower than $22, it will stay the same and be reassessed during each annual review."
+
+MESSAGE user "Who inspects licensed child care facilities?"
+MESSAGE assistant "Ottawa Public Health inspects all licensed child care facilities."
+
+MESSAGE user "When will the City stop using the revenue replacement model for funding allocation?"
+MESSAGE assistant "Starting in 2025, the City will no longer calculate eligible service providers' funding allocation using the revenue replacement model."
+
+MESSAGE user "What percentage does the Ministry predict as an inflationary increase in costs related to providing child care in 2025?"
+MESSAGE assistant "The Ministry has predicted an inflationary increase of 4.65 per cent to account for the increase in costs related to providing child care in 2025."
+
+MESSAGE user "What is the maximum length of program closures if fees are charged to families?"
+MESSAGE assistant "Program closures must not exceed two consecutive weeks, and no more than four weeks (20 days) in a calendar year if a service provider charges fees to families or caregivers during a closure period."
+
+MESSAGE user "How much of a wage increase can licensed program staff and home visitors receive through the 2024 Wage Enhancement Grant?"
+MESSAGE assistant "Licensed program staff and home visitors can receive an increase of up to $2 per hour through the 2024 Wage Enhancement Grant."
+
+MESSAGE user "What age range is served by Indigenous EarlyON Child and Family Centres?"
+MESSAGE assistant "Indigenous EarlyON Child and Family Centres serve Indigenous children from birth to 6 years old."
+
+MESSAGE user "What hours can I call 3-1-1 to contact Children's Services?"
+MESSAGE assistant "You can call 3-1-1 Monday to Friday between 8:30 am and 4:30 pm to contact Children's Services."
+
+MESSAGE user "What are the days and hours I can call to contact Children's Services?"
+MESSAGE assistant "You can contact Children's Services by phone at 3-1-1 Monday to Friday between 8:30 am and 4:30 pm."
+
+MESSAGE user "What age range do EarlyON centres serve?"
+MESSAGE assistant "EarlyON Child and Family Centres serve families and children from birth to 6 years old."
+
+MESSAGE user "Can I get information about other family services at an EarlyON centre?"
+MESSAGE assistant "Yes, you can find out about other family services in your community at EarlyON centres."
+
+MESSAGE user "Can EarlyON provide advice on child development?"
+MESSAGE assistant "Yes, you can get advice from professionals trained in early childhood development."
+
+MESSAGE user "Who should I contact to get support for my child with special needs in child care?"
+MESSAGE assistant "Families do not need to contact Children's Inclusion Support Services (CISS) directly; CISS staff work with the child care program staff to meet the child's needs."
+
+MESSAGE user "Who creates Individualized Support Plans?"
+MESSAGE assistant "Child care service providers will work with families and any regulated health care professionals who are involved in a child's care to develop the plan."
+
+MESSAGE user "What are some ways to help my child prepare for child care?"
+MESSAGE assistant "Consider visiting the child care program with your child before their first day and having them slowly go to child care more and more each day."
+
+MESSAGE user "Where can I find information on inclusive recreation programs in Ottawa?"
+MESSAGE assistant "You can find information on inclusive recreation programs through the City of Ottawa."
+
+MESSAGE user "What email can job seekers use to contact Employment Ontario?"
+MESSAGE assistant "Job seekers can contact EOottawa@ottawa.ca."
+
+MESSAGE user "What is the goal of the Ontario Job Creation Partnership?"
+MESSAGE assistant "The goal of Ontario Job Creation Partnership (OJCP) is to offer meaningful recent work experience that can be added to your resume."
+
+MESSAGE user "How quickly will someone from Employment Ontario get back to employers?"
+MESSAGE assistant "A member of the team will get back to you within two business days."
+
+MESSAGE user "What are the hours of operation for Employment Ontario?"
+MESSAGE assistant "Employment Ontario is open from 8 am to 4:30 pm, Monday to Friday."
+
+MESSAGE user "Where can I find walking resources for older adults?"
+MESSAGE assistant "Walking resources are available online."
+
+MESSAGE user "How much does the DVD from Osteoporosis Canada cost?"
+MESSAGE assistant "The DVD from Osteoporosis Canada costs $20, plus shipping and handling."
+
+MESSAGE user "What phone number can I call for information on Taoist Tai Chi?"
+MESSAGE assistant "For information on Taoist Tai Chi, contact the Taoist Tai Chi Society at 613-233-2318."
+
+MESSAGE user "Who can I contact for more information about the SAYGO program?"
+MESSAGE assistant "Contact Ellie Robson at Capital Health Authority by telephone, 780-413-7954 or by fax at 780-482-4194 for SAYGO program information."
+
+MESSAGE user "What types of support does the Ontario Disability Support Program offer?"
+MESSAGE assistant "The Ontario Disability Support Program offers financial assistance for essential living expenses, benefits like prescription drugs and vision care, and help finding a job."
+
+MESSAGE user "What can Essential Health and Social Supports help pay for?"
+MESSAGE assistant "Essential Health and Social Supports may help pay for urgent dental care, eye exams and glasses, and fuel arrears."
+
+MESSAGE user "What is the annual amount of fee support offered for each person through Ottawa Hand in Hand?"
+MESSAGE assistant "Each qualifying individual is eligible for $185 per year in fee support through the Ottawa Hand in Hand program."
+
+MESSAGE user "What should I do if I'm receiving ODSP and need help with the cost of medical supplies?"
+MESSAGE assistant "If you are receiving ODSP, you can call 613-596-2035 for help with the cost of medical supplies."
+
+MESSAGE user "Who qualifies for the Ontario Drug Benefit program?"
+MESSAGE assistant "Those who qualify for the Ontario Drug Benefit program include those on the Ontario Disability Support Program, those 65 years of age or older, and those who are residents of long-term care facilities."
+
+MESSAGE user "By what year is the older adult population in Ottawa expected to double?"
+MESSAGE assistant "The older adult population in Ottawa is expected to double by 2031."
+
+MESSAGE user "Who can assist vulnerable seniors in Ottawa?"
+MESSAGE assistant "People living and working in the community can help vulnerable seniors."
+
+MESSAGE user "What number can I call for information on supports and services in Ottawa?"
+MESSAGE assistant "For information on other supports and services in Ottawa, call 2-1-1."
+
+MESSAGE user "What are some signs that a senior in Ottawa may be vulnerable?"
+MESSAGE assistant "A vulnerable senior may have declining physical and cognitive health, be isolated, or have trouble accessing a family physician."
+
+MESSAGE user "What should I do if I know a vulnerable senior in Ottawa?"
+MESSAGE assistant "Learn about services that can help, offer information to the person, and connect the person to a support or service."
+
+MESSAGE user "What are some services that can help me around the house?"
+MESSAGE assistant "The City of Ottawa offers services such as snow removal assistance, home support, and library homebound services."
+
+MESSAGE user "When are snow angel nominations accepted?"
+MESSAGE assistant "Snow Angel nominations are accepted from December 1 to March 31."
+
+MESSAGE user "What does the Snow Go program do?"
+MESSAGE assistant "The Snow Go program provides a matching service for older adults and people with disabilities to hire someone to clear snow from private driveways and walkways at an affordable rate."
+
+MESSAGE user "If I nominate a snow angel, what will they receive?"
+MESSAGE assistant "Snow Angels will receive a certificate signed by the Mayor."
+
+MESSAGE user "What phone number can seniors call for social housing information?"
+MESSAGE assistant "The phone number for social housing is 613-526-2088."
+
+MESSAGE user "I'm looking for information on deferring my property taxes; what number should I call?"
+MESSAGE assistant "Call 613-580-2424 for information on the full and partial property tax deferral program."
+
+MESSAGE user "What is the phone number for emergency financial assistance?"
+MESSAGE assistant "The phone number for emergency assistance is 613-560-6000."
+
+MESSAGE user "Who do I contact for emergency shelter?"
+MESSAGE assistant "For emergency shelter, call 613-560-6000."
+
+MESSAGE user "What is the phone number for the Essential Health and Social Supports program?"
+MESSAGE assistant "The phone number for the Essential Health and Social Supports program is 613-560-6000."
+
+MESSAGE user "How can Ottawa residents with disabilities obtain an application for an accessible parking permit?"
+MESSAGE assistant "Ottawa residents can obtain an application for an accessible parking permit by calling ServiceOntario at 1-800-267-8097 or by contacting their local ServiceOntario centre."
+
+MESSAGE user "If I have an accessible parking permit, how long can I park at Pay & Display machines?"
+MESSAGE assistant "Time limits are extended to 4 hours at Pay & Display machines and elsewhere where parking is permitted, regardless of the time limit posted on the signs."
+
+MESSAGE user "Are there any cycling programs for children in Ottawa?"
+MESSAGE assistant "Yes, the City of Ottawa offers Bike Rodeos for children ages 6 to 10, which are interactive bicycle skills and safety events, lasting two hours."
+
+MESSAGE user "How long are the private cycling lessons for adults?"
+MESSAGE assistant "The private cycling lessons for adults are one hour long."
+
+MESSAGE user "What should I use if I have trouble getting into or out of the bathtub?"
+MESSAGE assistant "Use a bath seat or a hand held shower."
+
+MESSAGE user "What should I do to ensure safe stairs in my home?"
+MESSAGE assistant "Ensure steps are of consistent height and depth, and avoid visually distracting patterns."
+
+MESSAGE user "What should I use to mark the edges of stairs?"
+MESSAGE assistant "Use yellow or contrasting colour paint to ensure clear marking."
+
+MESSAGE user "Where should handrails be placed on stairs?"
+MESSAGE assistant "Handrails are firmly attached on both sides of the stairs."
+
+MESSAGE user "Where can I register for older adult programs?"
+MESSAGE assistant "You can register at Register Ottawa."
+
+MESSAGE user "What is the drop-in fee for seniors' public skating in 2025?"
+MESSAGE assistant "The drop-in fee for public skating is $3.10 for seniors in 2025."
+
+MESSAGE user "What is the cost of a 3-month all-inclusive membership for seniors ages 65 and older in 2025?"
+MESSAGE assistant "A 3-month all-inclusive membership costs $143.11 for seniors ages 65 and older."
+
+MESSAGE user "How many visits do I get with the free Try It fitness pass?"
+MESSAGE assistant "Your free Try It fitness pass gives you three visits to participating facilities."
+
+MESSAGE user "What phone number can I call to get information on city programs and services?"
+MESSAGE assistant "You can call 3-1-1 for information about City of Ottawa services and programs."
+
+MESSAGE user "Are there any client service centers in Ottawa and what are their hours?"
+MESSAGE assistant "Yes, there are seven Client Service Centres that provide information about City of Ottawa services and programs; urban Client Service Centres' business hours are Monday to Friday 8:30 am to 4:30 pm, except for the City Hall Government Service Centre, which is open Monday to Friday 8:30 am to 5 pm."
+
+MESSAGE user "What can I call if I need help finding community, government, and health services?"
+MESSAGE assistant "Call 2-1-1 for assistance finding community, government, and health services."
+
+MESSAGE user "What number can I call for OC Transpo information?"
+MESSAGE assistant "Call 613-741-4390 or TTY 613-741-5280 for OC Transpo information; staff can assist in answering your questions in more than 170 languages."
+
+MESSAGE user "What number should I dial for real-time bus arrival information?"
+MESSAGE assistant "For real-time bus arrivals, call 613-560-1000 or text 560560 plus your four-digit stop number."
+
+MESSAGE user "How can I register for the Special Consideration Waste program?"
+MESSAGE assistant "To register for the Special Consideration Waste program, call 3-1-1."
+
+MESSAGE user "What number can I call to get more information about the Library's Homebound Services?"
+MESSAGE assistant "To find out more about the Library's Homebound Services, call 613-580-2944."
+
+MESSAGE user "Who do I contact to apply for long-term care?"
+MESSAGE assistant "Contact the Community Care Access Centre at 613-745-5525 for information on how to apply for long-term care."
+
+MESSAGE user "What number can I call to get more information about Property Tax Deferral for seniors?"
+MESSAGE assistant "Call 613-580-2740 to find out more about Property Tax Deferral."
+
+MESSAGE user "What percentage discount do residents 65+ receive on City of Ottawa program registration fees?"
+MESSAGE assistant "Residents 65+ receive a 10% discount on City of Ottawa program registration fees."
+
+MESSAGE user "What is the phone number for InfoService at the Ottawa Public Library?"
+MESSAGE assistant "You can reach InfoService at the Ottawa Public Library by calling 613-580-2940."
+
+MESSAGE user "What number should I dial to report an emergency?"
+MESSAGE assistant "If you have an emergency, call 9-1-1."
+
+MESSAGE user "Who can I contact if I'm concerned about elder abuse?"
+MESSAGE assistant "Contact the Elder Abuse Section at 613-236-1222, extension 2400 or 5433 if you are concerned about an older person."
+
+MESSAGE user "What is the intention of the Older Adult Plan?"
+MESSAGE assistant "The goal of the Older Adult Plan is make Ottawa an age-friendly community through City services and community partnerships."
+
+MESSAGE user "When did the City consult with residents and community agencies for the new Older Adult Plan?"
+MESSAGE assistant "The City consulted with residents and community agencies from June to September 2024."
+
+MESSAGE user "What online services were launched for Para Transpo customers in April 2022?"
+MESSAGE assistant "In April 2022, online Para Transpo trip booking and cancellation, and ride tracking were launched."
+
+MESSAGE user "How many affordable housing units for a mixed population were completed between 2020-2022?"
+MESSAGE assistant "216 new affordable housing units geared towards a mixed population, including seniors, were completed and occupied between 2020 and 2022."
+
+MESSAGE user "Who is the current City Manager of Ottawa?"
+MESSAGE assistant "Wendy Stephanson is the current City Manager."
+
+MESSAGE user "What was Wendy Stephanson's role before becoming City Manager?"
+MESSAGE assistant "Prior to becoming City Manager, Wendy Stephanson was the Chief Financial Officer (CFO)."
+
+MESSAGE user "Who is the Director of the City Manager's Office?"
+MESSAGE assistant "Steve Box is the Director of the City Manager's Office."
+
+MESSAGE user "What is the name of Ottawa's City Clerk?"
+MESSAGE assistant "Caitlin Salter MacDonald is the City Clerk."
+
+MESSAGE user "How large is the Rink of Dreams?"
+MESSAGE assistant "The Rink of Dreams is 12,500 square feet."
+
+MESSAGE user "When is the Rink of Dreams open each year?"
+MESSAGE assistant "The Rink of Dreams operates annually from December through to the end of March."
+
+MESSAGE user "After what time are weekday bookings at City Hall available?"
+MESSAGE assistant "Weekday bookings are available only after regular City Hall business hours, which is 5 pm."
+
+MESSAGE user "What is the cost to rent an LCD projector at City Hall?"
+MESSAGE assistant "The rental cost for an LCD projector is $100 plus HST."
+
+MESSAGE user "What is the minimum amount of liability insurance required for events at Ottawa City Hall?"
+MESSAGE assistant "The minimum liability insurance required is $2,000,000.00."
+
+MESSAGE user "When was the information on terms and conditions for public spaces at Ottawa City Hall last updated?"
+MESSAGE assistant "The terms and conditions were last updated in September 2018."
+
+MESSAGE user "Where can I find meeting schedules for the City of Ottawa?"
+MESSAGE assistant "Meeting schedules are available through the City's Agendas and minutes web portal."
+
+MESSAGE user "What is the estimated time to complete the security screening process at City Hall?"
+MESSAGE assistant "The estimated time to complete the security screening process is approximately one minute."
+
+MESSAGE user "How many upcoming meetings appear by default in the list view on the agenda and minutes web portal?"
+MESSAGE assistant "Five upcoming meetings appear by default."
+
+MESSAGE user "What are some examples of boards in Ottawa?"
+MESSAGE assistant "Business Improvement Areas, the ByWard Market District Authority, and the Committee of Adjustment are examples of boards."
+
+MESSAGE user "Does Ottawa have an Investment Board?"
+MESSAGE assistant "Yes, Ottawa has an Ottawa Investment Board."
+
+MESSAGE user "Is the Ottawa Public Library overseen by a board?"
+MESSAGE assistant "Yes, the Ottawa Public Library Board oversees the library."
+
+MESSAGE user "What kind of authority is the Sparks Street Mall Authority?"
+MESSAGE assistant "The Sparks Street Mall Authority is a board."
+
+MESSAGE user "Is there a board related to health in Ottawa?"
+MESSAGE assistant "Yes, the Ottawa Board of Health exists in Ottawa."
+
+MESSAGE user "How can I find out when City Council meetings are scheduled?"
+MESSAGE assistant "Meeting schedules are listed online, and meeting information is advertised in Friday's edition of Ottawa's daily newspapers."
+
+MESSAGE user "How late can I submit written comments for a committee meeting?"
+MESSAGE assistant "Written comments must be submitted by 4:00 PM on the business day before the meeting, unless otherwise noted on the agenda."
+
+MESSAGE user "What do I need to include when I register to speak at a committee meeting?"
+MESSAGE assistant "You must include your name, telephone number, and email address when you register to speak at a committee meeting."
+
+MESSAGE user "What items are prohibited at City Council meetings?"
+MESSAGE assistant "Prohibited items include noisemakers, placards, sharp objects, compressed gas cylinders, firearms, and beverages."
+
+MESSAGE user "How many members are on the City Council?"
+MESSAGE assistant "The City Council has 25 members."
+
+MESSAGE user "What municipal services does the City Council handle?"
+MESSAGE assistant "The City Council handles municipal services including policing, water, transit, garbage and recycling, sewers, fire and paramedics."
+
+MESSAGE user "Where can I find out who my Councillor is?"
+MESSAGE assistant "Use the City's ward look-up tool to find your ward and Councillor."
+
+MESSAGE user "What is the early payment for violation 23 in city wards?"
+MESSAGE assistant "The early payment for violation 23 is 14."
+
+MESSAGE user "What is the early payment for violation 1 in city wards?"
+MESSAGE assistant "The early payment for violation 1 is 23."
+
+MESSAGE user "What is the early payment for violation 24 in city wards?"
+MESSAGE assistant "The early payment for violation 24 is 1."
+
+MESSAGE user "What by-law number is the Procedure By-law?"
+MESSAGE assistant "The Procedure By-law is By-law No. 2022-410."
+
+MESSAGE user "What is the by-law number for the Code of Conduct for Citizen Members of the Built Heritage Standing Committee?"
+MESSAGE assistant "The Code of Conduct for Citizen Members of the Built Heritage Standing Committee is By-law No. 2022-413."
+
+MESSAGE user "When was the Accountability and Transparency Policy last revised?"
+MESSAGE assistant "The Accountability and Transparency Policy was last revised on December 7, 2022."
+
+MESSAGE user "When was the Advisory Committees Participation Expense Policy last revised?"
+MESSAGE assistant "The Advisory Committees Participation Expense Policy was last revised on December 7, 2022."
+
+MESSAGE user "When did the City Council approve the Appointment Policy for public members of committees, boards, and external authorities?"
+MESSAGE assistant "City Council approved the Appointment Policy on March 28, 2001."
+
+MESSAGE user "How long can I serve on a City of Ottawa committee?"
+MESSAGE assistant "Members are eligible to serve up to eight consecutive years on the same committee or board."
+
+MESSAGE user "When was the Community, Fundraising and Special Events Policy last revised?"
+MESSAGE assistant "The Community, Fundraising and Special Events Policy was last revised on December 14, 2022."
+
+MESSAGE user "When was the Council Expense Policy last revised?"
+MESSAGE assistant "The Council Expense Policy was last revised on December 7, 2022."
+
+MESSAGE user "What is the contribution limit from a Members annual Constituency Services Budget?"
+MESSAGE assistant "Contributions are limited to 3.5% of the Members annual Constituency Services Budget."
+
+MESSAGE user "When was the Council-Staff Relations Policy last revised?"
+MESSAGE assistant "The Council-Staff Relations Policy was last revised on December 7, 2022."
+
+MESSAGE user "When was the Delegation of Powers Policy last revised?"
+MESSAGE assistant "The Delegation of Powers Policy was last revised on December 7, 2022."
+
+MESSAGE user "When was the Election-Related Resources Policy last revised?"
+MESSAGE assistant "The Election-Related Resources Policy was last revised on January 29, 2025."
+
+MESSAGE user "When was the Petition Policy last revised?"
+MESSAGE assistant "The Petition Policy was last revised on January 29, 2025."
+
+MESSAGE user "When did the City Council approve the Pregnancy and Parental Leave for Members of Council Policy?"
+MESSAGE assistant "City Council approved the Pregnancy and Parental Leave for Members of Council Policy on November 22, 2017."
+
+MESSAGE user "What is the document about?"
+MESSAGE assistant "The document concerns council sponsors groups and liaisons."
+
+MESSAGE user "When do the Councillor orientation sessions start?"
+MESSAGE assistant "The City will hold additional orientation sessions and tours for members of City Council starting November 21."
+
+MESSAGE user "Can residents attend the Councillor orientation sessions?"
+MESSAGE assistant "Yes, residents are able to attend orientation sessions."
+
+MESSAGE user "When is the tour of OC Transpo's facilities?"
+MESSAGE assistant "The tour of OC Transpo's facilities is on November 21."
+
+MESSAGE user "When is the Public Information and Media Relations orientation?"
+MESSAGE assistant "The Public Information and Media Relations orientation is January 16 from 2:30 to 3:30 pm in Champlain Room, Ottawa City Hall, 110 Laurier Avenue West."
+
+MESSAGE user "When is the Infrastructure and Water Services Orientation?"
+MESSAGE assistant "The Infrastructure and Water Services Orientation is January 23 from 9 am to noon in Champlain Room, Ottawa City Hall, 110 Laurier Avenue West."
+
+MESSAGE user "When is the Open Data and ServiceOttawa/3-1-1 orientation?"
+MESSAGE assistant "The Open Data and ServiceOttawa/3-1-1 orientation is February 3 from 1 pm to 3 pm in Council Chambers, Ottawa City Hall, 110 Laurier Avenue West."
+
+MESSAGE user "When is the Orientation session on the Planning, Real Estate and Economic Development work plan"
+MESSAGE assistant "The Orientation session on the Planning, Real Estate and Economic Development work plan is May 29 from 1 to 3 pm in the Richmond Room, Ottawa City Hall, 110 Laurier Avenue West."
+
+MESSAGE user "When is the Orientation refresher session on the unique roles of Council Members and Police Governance?"
+MESSAGE assistant "The Orientation refresher session on the unique roles of Council Members and Police Governance is August 3 from 9 am in Champlain Room, Ottawa City Hall, 110 Laurier Avenue West."
+
+MESSAGE user "What by-law number created the position of Auditor General?"
+MESSAGE assistant "Auditor General By-law No. 2021-5 created the position of Auditor General."
+
+MESSAGE user "Which by-law number is associated with the City Manager position?"
+MESSAGE assistant "By-law No. 2021-6 is associated with the City Manager position."
+
+MESSAGE user "I'm looking for information on the Integrity Commissioner. Which by-law should I reference?"
+MESSAGE assistant "By-law No. 2021-7 relates to the Integrity Commissioner, Meetings Investigator, and Lobbyist Registrar."
+
+MESSAGE user "Where can I find the City of Ottawa's annual report?"
+MESSAGE assistant "You can find the City of Ottawa Annual Report at It's About Accountability."
+
+MESSAGE user "What should I include when attributing information obtained from the City of Ottawa's Open Data platform?"
+MESSAGE assistant "Include any attribution statement specified by the Information Provider or, if none is provided, use the statement: Contains information licensed under the Open Government Licence – City of Ottawa."
+
+MESSAGE user "What types of information does the City of Ottawa Open Data Licence not grant me the right to use?"
+MESSAGE assistant "This licence does not grant you any right to use personal information, third party rights, the names, crests, logos, or other official symbols of the Information Provider, and information subject to other intellectual property rights."
+
+MESSAGE user "What legislation governs the City of Ottawa's Open Data Licence?"
+MESSAGE assistant "This licence is governed by the laws of the Province of Ontario and the applicable laws of Canada."
+
+MESSAGE user "When was the Open Data License FAQ last updated?"
+MESSAGE assistant "The Open Data License FAQ was last updated on September 8, 2016."
+
+MESSAGE user "What rights do I have regarding my personal information held by the City of Ottawa?"
+MESSAGE assistant "You have the right to see your personal information held by the City about yourself and to request corrections to it. Note that opinions cannot be changed or removed."
+
+MESSAGE user "Who oversees the Municipal Freedom of Information and Protection of Privacy Act for the City of Ottawa?"
+MESSAGE assistant "Ontario's Information and Privacy Commissioner, appointed by the Provincial Legislature, oversees all aspects of the Municipal Freedom of Information and Protection of Privacy Act for the City of Ottawa."
+
+MESSAGE user "What is the Access to Information and Privacy Office responsible for?"
+MESSAGE assistant "The City's Access to Information and Privacy Office is responsible for responding to formal requests submitted under MFIPPA and evaluating informal requests to enhance public access."
+
+MESSAGE user "What documents are available for public viewing?"
+MESSAGE assistant "The public can view office expenses, protocol expenses, dissemination plans, council memoranda, mayoral decisions, MFIPPA requests, executed contracts, and reports."
+
+MESSAGE user "Who does the Meetings Investigator report their findings to?"
+MESSAGE assistant "The Meetings Investigator reports findings and recommendations directly to City Council and/or the local board."
+
+MESSAGE user "How much does it cost to submit a Request for Investigation?"
+MESSAGE assistant "There is no fee required for submitting a Request for Investigation."
+
+MESSAGE user "What date did investigation provisions begin applying to meetings?"
+MESSAGE assistant "The investigation provisions only apply to meetings held on or after January 1, 2008."
+
+MESSAGE user "To whom does the Integrity Commissioner report?"
+MESSAGE assistant "The Integrity Commissioner reports directly to City Council."
+
+MESSAGE user "What are some responsibilities of the Integrity Commissioner?"
+MESSAGE assistant "The City's Integrity Commissioner is responsible for codes of conduct and resolving complaints related to a potential breach of a code of conduct."
+
+MESSAGE user "What is the Integrity Commissioner responsible for providing information about?"
+MESSAGE assistant "The Integrity Commissioner is responsible for providing educational information to members of council, members of local boards, the municipality and the public about the municipality's codes of conduct for members of council and members of local boards and about the Municipal Conflict of Interest Act."
+
+MESSAGE user "How quickly after lobbying must I register it?"
+MESSAGE assistant "Lobbying must be registered with the Lobbyist Registry within 15 business days of the activity taking place."
+
+MESSAGE user "Who oversees and enforces the Lobbyist Registry?"
+MESSAGE assistant "The City of Ottawa's Integrity Commissioner oversees and enforces the Lobbyist Registry and the Lobbyist Code of Conduct."
+
+MESSAGE user "What is the first sanction for breaching the Lobbyist Registry rules?"
+MESSAGE assistant "For a first breach of the Lobbyist Registry By-Law, the Lobbyist is banned from communicating with public office holders for one month."
+
+MESSAGE user "When did the new integrated framework for municipal conflict of interest rules take effect?"
+MESSAGE assistant "The new framework for municipal conflict of interest rules took effect on March 1, 2019."
+
+MESSAGE user "Who can request a conflict of interest investigation?"
+MESSAGE assistant "An eligible elector or a person demonstrably acting in the public interest can apply to the Integrity Commissioner to request an investigation."
+
+MESSAGE user "Is there a cost associated with filing a conflict of interest complaint?"
+MESSAGE assistant "No, there is no fee to submit a complaint."
+
+MESSAGE user "What is the maximum suspension of remuneration that a judge can apply for contravening the Municipal Conflict of Interest Act?"
+MESSAGE assistant "A judge can apply a suspension of remuneration for up to 90 days."
+
+MESSAGE user "To whom do the Regulatory Monitor and Compliance Officer report?"
+MESSAGE assistant "The Compliance Officer reports directly to the City Manager and to City Council."
+
+MESSAGE user "How often does the Compliance Officer meet with the City Manager?"
+MESSAGE assistant "The Compliance Officer meets quarterly with the City Manager."
+
+MESSAGE user "What is Sam Berrada's email address?"
+MESSAGE assistant "Sam Berrada's email address is sabvanguard@gmail.com."
+
+MESSAGE user "Where did Sam Berrada earn his MBA?"
+MESSAGE assistant "Sam Berrada earned his MBA from McGill University in 1997."
+
+MESSAGE user "What months are winter parking restrictions in effect?"
+MESSAGE assistant "Winter parking restrictions are in effect between December 1 and March 31."
+
+MESSAGE user "During a winter weather parking ban, between what times can I park for free at 210 Gloucester Street?"
+MESSAGE assistant "Free parking is available at 210 Gloucester Street from 9 pm to 8:30 am during a winter weather parking ban."
+
+MESSAGE user "If a winter weather parking ban is called overnight, what hours are the ban in effect?"
+MESSAGE assistant "Overnight winter weather parking bans are from 7 pm to 7 am."
+
+MESSAGE user "If a winter weather parking ban is called during the day, what hours are the ban in effect?"
+MESSAGE assistant "Daytime winter weather parking bans will be from 10 am to 7 pm."
+
+MESSAGE user "During what months could a Winter Weather Parking Ban be declared?"
+MESSAGE assistant "The City may declare a Winter Weather Parking Ban between November 15 and April 1."
+
+MESSAGE user "If I don't have a residential parking permit, what could happen if I park on the street during a Winter Weather Parking Ban?"
+MESSAGE assistant "Vehicles without a residential parking permit that are parked on the street during a parking ban may be ticketed and towed."
+
+MESSAGE user "If a Winter Weather Parking Ban is called, what time will a daytime parking ban be in effect?"
+MESSAGE assistant "Daytime parking bans will be from 10 am to 7 pm."
+
+MESSAGE user "If I can't find my car after it has been towed during a Winter Weather Parking Ban, who should I call?"
+MESSAGE assistant "If you cannot find your vehicle, call 3-1-1."
+
+MESSAGE user "If temporary 'No Parking' signs are posted for snow removal, does the parking ban apply to residential parking permit holders?"
+MESSAGE assistant "This parking ban applies to all vehicles, including vehicles with residential parking permits."
+
+MESSAGE user "When will Orléans Boulevardover Highway 174 be reduced to one lane?"
+MESSAGE assistant "Orléans Boulevardover Highway 174 will be reduced to one lane in each direction daily between 7 am and 3 pm until Friday, February 14."
+
+MESSAGE user "When were seasonal load restrictions lifted in 2024?"
+MESSAGE assistant "Seasonal load restrictions were lifted as of Monday, April 29, 2024."
+
+MESSAGE user "What are low-speed vehicles typically used for?"
+MESSAGE assistant "Due to the low-speed constraint, these vehicles are typically used for short distance travel in urban areas or within restricted facilities."
+
+MESSAGE user "What is the goal of the 2020-2024 Road Safety Action Plan?"
+MESSAGE assistant "The goal is a 20 per cent reduction in the average annual rate of fatal and major injury collisions by 2024."
+
+MESSAGE user "What is the focus of the Be Safe Be Seen initiative?"
+MESSAGE assistant "Be Safe Be Seen focuses on raising awareness of all vulnerable road users to be more visible when traveling on Ottawa roads, distributing reflective gear in the fall."
+
+MESSAGE user "What percentage of major injury collisions between 2019 and 2023 involved high-risk driving behaviors?"
+MESSAGE assistant "61 percent of fatal and major injury collisions involved high-risk driving behaviors between 2019 and 2023."
+
+MESSAGE user "How many community engagement initiatives will be organized and/or supported?"
+MESSAGE assistant "35 community engagement initiatives and events will be organized and/or supported."
+
+MESSAGE user "What do Ottawa's annual collision reports provide data on?"
+MESSAGE assistant "Annual collisions reports provide statistical data on all reported collisions on City of Ottawa roads within a five year period."
+
+MESSAGE user "How many locations will receive high-visibility ladder markings in 2023?"
+MESSAGE assistant "High-visibility ladder markings will be implemented at 10 locations."
+
+MESSAGE user "What are the hours of operation for the Provincial Offences Court offices?"
+MESSAGE assistant "The Provincial Offences Court offices are open Monday to Friday from 8:30 am to 4:30 pm."
+
+MESSAGE user "If I want to pay my parking ticket via an automated system, what number can I call?"
+MESSAGE assistant "You can call 613-738-7719 to pay parking tickets using the automated payment system, 24 hours a day, 7 days a week."
+
+MESSAGE user "What is the service charge for paying a parking ticket online?"
+MESSAGE assistant "A $1.50 service charge applies to each ticket payment in addition to any other service charge applied by your financial institution."
+
+MESSAGE user "Where can I drop off a cheque or money order for a parking ticket payment?"
+MESSAGE assistant "Drop off boxes are located at the main entrance of 100 Constellation Drive and 255 Centrum Boulevard."
+
+MESSAGE user "When can I pay my Automated Speed Enforcement ticket online?"
+MESSAGE assistant "Your ticket can only be paid online on or after the date of deemed service, which is found on the bottom left of your ticket."
+
+MESSAGE user "When did seasonal load restrictions end in 2024?"
+MESSAGE assistant "Seasonal load restrictions were no longer in effect as of Monday, April 29, 2024."
+
+MESSAGE user "When does the methyl methacrylate paint truck operate?"
+MESSAGE assistant "The methyl methacrylate (MMA) paint truck operates from June to September."
+
+MESSAGE user "When will eastbound and westbound Corkstown Road near Abbott Point of Care be fully closed?"
+MESSAGE assistant "Eastbound and westbound Corkstown Road near Abbott Point of Care will be fully closed at 9 pm on Tuesday, February 11 until 5 am on Wednesday, February 12."
+
+MESSAGE user "What kind of cycling resources are available?"
+MESSAGE assistant "Maps, safety information, bike parking and repair station locations, cycling and transit integration details, clubs and organizations, the Bruce Timmermans cycling awards, and tour and rental options are available."
+
+MESSAGE user "What is the TravelWise program?"
+MESSAGE assistant "TravelWise is a City of Ottawa program that provides workplaces with policies and programs to encourage employees to use transit, bike, walk, and carpool to work."
+
+MESSAGE user "What are the benefits of improving commuting at my workplace?"
+MESSAGE assistant "Improving commuting can reduce the number of cars parked at your workplace, increase employee retention, and reduce GHG emissions."
+
+MESSAGE user "How much can driving cost per kilometer?"
+MESSAGE assistant "Driving can cost you from 40 to 80 cents per kilometer."
+
+MESSAGE user "Can I use OttawaRideMatch.com to indicate when I am available to carpool?"
+MESSAGE assistant "Yes, OttawaRideMatch.com allows you to indicate when you are available to carpool."
+
+MESSAGE user "What is the vehicle age limit for vehicles for hire?"
+MESSAGE assistant "The vehicle age limit is 10 years, with an exception for classic, vintage, and specialty limousines."
+
+MESSAGE user "Can private transportation vehicles accept cash payments?"
+MESSAGE assistant "No, private transportation vehicles cannot accept cash payments."
+
+MESSAGE user "What does a standard taxicab driver's license cost?"
+MESSAGE assistant "A standard taxicab driver license costs $160."
+
+MESSAGE user "How old do you have to be to apply for a taxi license?"
+MESSAGE assistant "Applicants must be over the age of 18."
+
+MESSAGE user "When do limousine operator licenses expire?"
+MESSAGE assistant "Operator licences expire annually on August 31."
+
+MESSAGE user "How much does a PTC company with 100 or more affiliated vehicles have to pay for a license?"
+MESSAGE assistant "A PTC with 100 or more affiliated vehicles pays $8,145 plus $0.12 per trip."
+
+MESSAGE user "How many licensed taxis are there in Ottawa?"
+MESSAGE assistant "Ottawa has more than 1,100 licensed taxis."
+
+MESSAGE user "What should I look for in a licensed Private Transportation Company?"
+MESSAGE assistant "A licensed Private Transportation Company should have the colour and licence plate matching the description provided by the app you ordered the ride from and an identification card from the company verifying that individual driving is the same driver identified by the app."
+
+MESSAGE user "When does the 2024 e-scooter survey close?"
+MESSAGE assistant "The 2024 e-scooter survey ends November 30, 2024."
+
+MESSAGE user "If I ride an e-scooter on the sidewalk, how much is the fine?"
+MESSAGE assistant "The fine for riding an e-scooter on the sidewalk is $150."
+
+MESSAGE user "When did Ottawa make it legal to operate e-scooters?"
+MESSAGE assistant "It became legal to operate e-scooters in Ottawa on June 29, 2020."
+
+MESSAGE user "What is the early payment fine for a parking violation in Rideau?"
+MESSAGE assistant "The early payment fine for a parking violation in Rideau is $150."
+
+MESSAGE user "What are the hours for free parking at 2950 Riverside Drive during the winter?"
+MESSAGE assistant "From Thanksgiving Day weekend to Victoria Day weekend, parking at 2950 Riverside Drive is free."
+
+MESSAGE user "What should I do if a Pay and Display machine doesn't dispense tickets?"
+MESSAGE assistant "If a Pay and Display machine does not dispense tickets, you must pay for parking using the nearest working Pay and Display machine."
+
+MESSAGE user "How close to a fire hydrant can I legally park?"
+MESSAGE assistant "You cannot park within 3 metres of a fire hydrant."
+
+MESSAGE user "How can I pay for on-street parking at a pay and display machine?"
+MESSAGE assistant "You can pay for on-street parking at a pay and display machine using coins or a credit card (VISA, Mastercard, or American Express)."
+
+MESSAGE user "When do the new on-street parking rates go into effect?"
+MESSAGE assistant "The rate changes will begin on August 12th, 2024, and it will take several weeks to complete all changes."
+
+MESSAGE user "What is the maximum parking time allowed on weekends?"
+MESSAGE assistant "Parking is limited to six hours on weekends and statutory holidays, between 7:00 am and 7:00 pm."
+
+MESSAGE user "How do I report a problem with a pay and display machine?"
+MESSAGE assistant "You must provide the street name and number or street name and intersection of the parking machine and the Pay and Display machine number."
+
+MESSAGE user "Where can I pay on foot at City parking lots?"
+MESSAGE assistant "You can pay on foot at 141 Clarence Street, 70 Clarence Street, and 110 Laurier Avenue West."
+
+MESSAGE user "When do on-street parking rate changes start to take effect?"
+MESSAGE assistant "On-street parking rate changes will start on August 12th, 2024, and it will take a few weeks to complete all changes."
+
+MESSAGE user "What are the hours for free parking at 2950 Riverside Drive during the winter and spring months?"
+MESSAGE assistant "From Thanksgiving Day weekend to Victoria Day weekend, parking is free at 2950 Riverside Drive."
+
+MESSAGE user "Can I pay for on foot parking with bills?"
+MESSAGE assistant "Yes, you can pay on foot with cash (25¢, $1, $2 coins and bills) and credit cards."
+
+MESSAGE user "If a pay and display machine malfunctions, what should I do?"
+MESSAGE assistant "If a pay and display machine does not dispense tickets, you must pay for parking using the nearest Pay and Display machine."
+
+MESSAGE user "Between what dates could the City of Ottawa declare a Winter Weather Parking Ban?"
+MESSAGE assistant "The City may declare a Winter Weather Parking Ban between November 15 and April 1."
+
+MESSAGE user "What should I do if I cannot find my vehicle after it has been towed?"
+MESSAGE assistant "Call 3-1-1 if you cannot find your vehicle."
+
+MESSAGE user "What accumulation of snow in the forecast may cause a Winter Weather Parking Ban?"
+MESSAGE assistant "Environment Canada forecasting an accumulation of snow 7 centimetres or more may cause a Winter Weather Parking Ban."
+
+MESSAGE user "If the City calls a Winter Weather Parking Ban by 3:30 pm, what times will the daytime parking ban be in effect?"
+MESSAGE assistant "The daytime parking bans will be from 10 am to 7 pm if the Winter Weather Parking Ban is called by 3:30 pm."
+
+MESSAGE user "What hours are considered daytime for parking permit regulations?"
+MESSAGE assistant "Daytime is defined as the period from 7 am to 7 pm of the same day."
+
+MESSAGE user "What does 'overnight' mean in terms of parking regulations?"
+MESSAGE assistant "Overnight means the period from 7 pm of one day to 7 am of the next day."
+
+MESSAGE user "What is the maximum time a small business identity card permit holder can stop in a 'no parking' zone?"
+MESSAGE assistant "A small business identity card permit allows drivers to stop for up to 15 minutes in a 'No Parking Zone'."
+
+MESSAGE user "For how long can a vehicle remain parked in a designated day care parking permit zone?"
+MESSAGE assistant "Permit holders can park for no more than 15 minutes only in the defined area that corresponds to the day care permit."
+
+MESSAGE user "What is the maximum time a visitor can park with a visitor's parking permit?"
+MESSAGE assistant "Visitors parking permits allow parking in residential permit zones for a maximum of two weeks."
+
+MESSAGE user "How much does a tour bus parking permit cost?"
+MESSAGE assistant "A tour bus parking permit costs $30."
+
+MESSAGE user "As an accessible parking permit holder, am I exempt from winter parking bans?"
+MESSAGE assistant "No, accessible parking permit holders are subject to all other traffic and parking by-law provisions including respecting the winter parking bans."
+
+MESSAGE user "Who should I contact to report a vehicle parked in a No Stopping Zone?"
+MESSAGE assistant "Call 3-1-1 to report a vehicle parked in a No Stopping Zone."
+
+MESSAGE user "What number do I call to report a car blocking a fire hydrant?"
+MESSAGE assistant "Call 3-1-1 to report a vehicle blocking a fire hydrant."
+
+MESSAGE user "What do I need to report a broken parking pay and display machine?"
+MESSAGE assistant "You must provide the street name and number/intersection and the pay and display machine number when reporting an issue."
+
+MESSAGE user "What phone number do I dial to report a parking issue?"
+MESSAGE assistant "Call 3-1-1 to report a parking issue."
+
+MESSAGE user "I need to report unauthorized parking on private property, who do I call?"
+MESSAGE assistant "Call 3-1-1 to report unauthorized parking on private property."
+
+MESSAGE user "If a car is parked too far from the curb, who should I contact?"
+MESSAGE assistant "Call 3-1-1 to report a car parked too far from the curb."
+
+MESSAGE user "Where can I find information about parking regulations and restrictions?"
+MESSAGE assistant "Refer to the Traffic and Parking By-Law (No. 2017-301) for parking regulations and restrictions."
+
+MESSAGE user "Where can I find free tour bus parking?"
+MESSAGE assistant "Free tour bus parking is available on Commissioner Street, Metcalfe Street, Carling Avenue, and Princess Avenue."
+
+MESSAGE user "What methods of payment are accepted for on-street tour bus parking?"
+MESSAGE assistant "You can pay for on-street tour bus parking with 25¢, $1, and $2 coins or using paybyphone."
+
+MESSAGE user "Can tour buses stop on Parliament Hill?"
+MESSAGE assistant "No, tour buses cannot stop, park, or load passengers on Parliament Hill at any time."
+
+MESSAGE user "Where can tour buses park for free near the Canadian Museum of History?"
+MESSAGE assistant "Free tour bus parking is available at Robert-Guertin Arena, located at 125 rue de Carillon, Gatineau, Québec."
+
+MESSAGE user "Can I park my motorhome in City parking lots?"
+MESSAGE assistant "No, motorhomes cannot park in any City parking lots."
+
+MESSAGE user "Where can I park my motorcycle or scooter for half price?"
+MESSAGE assistant "Half-price motorcycle and scooter parking is available at all paid on-street spaces and most City parking lots."
+
+MESSAGE user "Is half-price motorcycle parking offered at the Dalhousie Garage?"
+MESSAGE assistant "No half-price parking is available at the Dalhousie Garage located at 141 Clarence Street."
+
+MESSAGE user "If the motorcycle compound is full at ByWard Market Garage, can I park elsewhere?"
+MESSAGE assistant "If the motorcycle and scooter compound is full at ByWard Market Garage, motorcycles and scooters can park anywhere in the garage at full price."
+
+MESSAGE user "Are all parking rules enforced on holidays?"
+MESSAGE assistant "Yes, all City of Ottawa parking regulations and restrictions apply on statutory holidays."
+
+MESSAGE user "If I park in a temporary 'Special Event' No Stopping zone, what could happen?"
+MESSAGE assistant "Vehicles parked in temporary 'Special Event' No Stopping zones will be ticketed and may be towed."
+
+MESSAGE user "What is the set fine for parking in front of a driveway?"
+MESSAGE assistant "The set fine for parking in front of a driveway is $85."
+
+MESSAGE user "What is the set fine for parking in a space reserved for the physically disabled without a permit?"
+MESSAGE assistant "The set fine for parking in a space reserved for physically disabled without a disability parking permit is $500."
+
+MESSAGE user "What is the early payment fine for parking within 3 m of a point on the curb or edge of roadway opposite fire hydrant?"
+MESSAGE assistant "The early payment fine is $80."
+
+MESSAGE user "What by-law gives authority for deputized individuals to issue parking tickets?"
+MESSAGE assistant "Bylaw 2017-301 gives authority to issue Parking Infraction Notices for motor vehicles parked on private property without consent."
+
+MESSAGE user "To what address should notices regarding the Deputization Program be mailed?"
+MESSAGE assistant "Notices should be mailed to City of Ottawa, Emergency and Protective Services, By-law & Regulatory Services, 735 Industrial Avenue, 2nd floor, Ottawa, ON K1G 5J1, Attention: Deputization Program."
+
+MESSAGE user "What does the Municipal Parking Management Strategy do?"
+MESSAGE assistant "The Municipal Parking Management Strategy sets the mandate for the Municipal Parking Management Program."
+
+MESSAGE user "When was the ByWard Market parking study completed?"
+MESSAGE assistant "The ByWard Market parking study was completed in 2011."
+
+MESSAGE user "When was the most recent Kitchissippi parking study completed?"
+MESSAGE assistant "The most recent Kitchissippi parking study was completed in 2023."
+
+MESSAGE user "Can I see the minutes from the Parking Stakeholder Consultation Group meeting in May of 2024?"
+MESSAGE assistant "Yes, the May 7, 2024 meeting minutes are available online."
+
+MESSAGE user "Where can I find residential development data for April to June of 2024?"
+MESSAGE assistant "You can find residential development data for April, May, and June of 2024 in the Q2 2024 report and the year-to-date April to June 2024 report."
+
+MESSAGE user "What population size is the Transportation Master Plan designed to serve by 2031?"
+MESSAGE assistant "The Transportation Master Plan (TMP) identifies the transportation facilities, services and policies that the City of Ottawa will implement to serve a projected population of 1.14 million people by 2031."
+
+MESSAGE user "What percentage of rural growth does the Official Plan envision will occur in villages?"
+MESSAGE assistant "The Official Plan envisions that at least 50 per cent of rural growth will occur in villages."
+
+MESSAGE user "Where can I find information on building permit revisions related to site deviation?"
+MESSAGE assistant "Information on building permit revisions related to site deviation can be found in the PDF document that is 186 KB."
+
+MESSAGE user "I need information on digital plan submission requirements. Where can I find this?"
+MESSAGE assistant "Information on digital plan submission requirements can be found in the PDF document that is 148 KB."
+
+MESSAGE user "I need information about sump pump systems for municipally serviced properties. Where can I find details?"
+MESSAGE assistant "Details regarding sump pump systems for municipally serviced properties are available in the PDF document that is 147 KB."
+
+MESSAGE user "What email address can I use to inquire about the New Zoning By-law?"
+MESSAGE assistant "You can send inquiries to newzoning@ottawa.ca."
+
+MESSAGE user "What versions of the draft Zoning Map are available?"
+MESSAGE assistant "Version 1.1 and Version 1.2 of the draft Zoning Map are available."
+
+MESSAGE user "How do I access the City's mapping application?"
+MESSAGE assistant "You can access the City's mapping application through geoOttawa."
+
+MESSAGE user "What is the purpose of Ottawa's Infrastructure Master Plan (IMP)?"
+MESSAGE assistant "The purpose of Ottawa's Infrastructure Master Plan (IMP) is to support the city-wide Official Plan (OP) goals of creating more vibrant, healthy and complete neighborhoods while ensuring long-term affordability for both the City government and residents."
+
+MESSAGE user "Until what year does the Infrastructure Master Plan ensure there is enough infrastructure capacity?"
+MESSAGE assistant "The IMP supports the OP by ensuring there is enough infrastructure capacity to accommodate development and redevelopment until 2046."
+
+MESSAGE user "What is the City of Ottawa's expected population by 2046?"
+MESSAGE assistant "The City of Ottawa's population is expected to reach 1.4 million by 2046."
+
+MESSAGE user "What was the value of agricultural products produced in Ottawa in 2011?"
+MESSAGE assistant "In 2011, agricultural products with a value estimated at over $200 million were produced in Ottawa."
+
+MESSAGE user "When did Ottawa adopt a new Land Evaluation and Area Review (LEAR) system?"
+MESSAGE assistant "The City of Ottawa adopted a new LEAR system in December 2016."
+
+MESSAGE user "When did Ottawa City Council approve the Transportation Master Plan (TMP) Part 1?"
+MESSAGE assistant "The Transportation Master Plan (TMP) – Part 1 was approved at the City Council meeting of April 26, 2023."
+
+MESSAGE user "By what year does the 2013 Transportation Master Plan (TMP) serve a projected population?"
+MESSAGE assistant "The 2013 Transportation Master Plan (TMP) identifies the transportation facilities, services and policies that the City of Ottawa will implement to serve a projected population of 1.14 million people by 2031."
+
+MESSAGE user "When did the City conduct consultations for the Parks and Recreation Facilities Master Plan?"
+MESSAGE assistant "The City conducted consultations for the Parks and Recreation Facilities Master Plan from January to the end of July 2021."
+
+MESSAGE user "When will current parkland dedication by-laws that calculate parkland dedication based on the alternative requirement expire if they are not re-enacted?"
+MESSAGE assistant "All current parkland dedication by-laws that calculate parkland dedication based on the alternative requirement will expire on September 2022 if they are not re-enacted."
+
+MESSAGE user "What is the fee for an internal street segment for work done on behalf of the City of Ottawa?"
+MESSAGE assistant "The internal street segment fee is $224.00."
+
+MESSAGE user "What is the circulation fee for utility circulation?"
+MESSAGE assistant "The circulation fee for utility circulation is $675.00."
+
+MESSAGE user "What is the per meter rate for municipal consent?"
+MESSAGE assistant "The per meter rate for municipal consent is $0.41."
+
+MESSAGE user "What is the Right of Way damage deposit for single dwellings?"
+MESSAGE assistant "The ROW damage deposit for single dwellings is $3000."
+
+MESSAGE user "When did the requirement to pay the ROW Damage Deposit application fee upon submission begin?"
+MESSAGE assistant "Starting January 1, 2024, the application fee must be paid at the time of submission of the ROW Damage Deposit."
+
+MESSAGE user "What is the standard security amount for resurfacing when a project is not subject to Site Plan Control or Subdivision approval?"
+MESSAGE assistant "The standard security amount is based on a rate of $50.00 per square metre times the area to be resurfaced."
+
+MESSAGE user "Which ward is Orléans East Cumberland?"
+MESSAGE assistant "Orléans East Cumberland is Ward 1."
+
+MESSAGE user "In what ward is Knoxdale-Merivale?"
+MESSAGE assistant "Knoxdale-Merivale is Ward 9."
+
+MESSAGE user "How many kilometers of roads does Ottawa maintain?"
+MESSAGE assistant "The City of Ottawa maintains approximately 6,000 kilometers of roads."
+
+MESSAGE user "After resurfacing, how long does crack sealing treatment typically last?"
+MESSAGE assistant "Crack sealing treatments typically last one to four years after a resurfacing project."
+
+MESSAGE user "What is the typical service life extension of a road that has been treated with slurry seal?"
+MESSAGE assistant "Slurry seal extends the service life by approximately five years."
+
+MESSAGE user "What steps are involved in getting my development application reviewed?"
+MESSAGE assistant "This information is located within the 'Development application review process' section."
+
+MESSAGE user "What are Geomatic Services?"
+MESSAGE assistant "Information on Geomatic Services is available in the 'Geomatic Services' section."
+
+MESSAGE user "What kind of community design information can I find here?"
+MESSAGE assistant "You can find information on community plans and studies, design and planning guidelines, subwatershed studies, and environmental management plans."
+
+MESSAGE user "What period does the residential development data in the Q2 2024 update report cover?"
+MESSAGE assistant "The Q2 2024 update reports on residential development data for April, May, and June."
+
+MESSAGE user "What does the City of Ottawa use 'Site Plan Control' for?"
+MESSAGE assistant "The City of Ottawa uses Site Plan Control to ensure that a lot layout is safe, functional, and orderly."
+
+MESSAGE user "What is the reporting period for the 2022 Official Plan Monitoring Draft Baseline Report?"
+MESSAGE assistant "The reporting period for this report is from 2018 to 2022, with certain growth management indicators measured mid-year to mid-year from July 1, 2018, to June 30, 2022."
+
+MESSAGE user "Where can I find residential development data for April 2024?"
+MESSAGE assistant "Residential development data for April to June 2024 is available in the Year to date April to June 2024 report."
+
+MESSAGE user "What are the five plans that set the vision for Ottawa's future growth?"
+MESSAGE assistant "The five plans are the Official Plan, Transportation Master Plan, Infrastructure Master Plan, Ottawa Cycling Plan, and Ottawa Pedestrian Plan."
+
+MESSAGE user "What does the Infrastructure Master Plan plan for?"
+MESSAGE assistant "The Infrastructure Master Plan plans for the efficient management, responsible operation, and targeted growth of water, wastewater, and stormwater infrastructure."
+
+MESSAGE user "How many villages are in rural Ottawa?"
+MESSAGE assistant "There are 26 villages in rural Ottawa."
+
+MESSAGE user "How can I find the planner assigned to a development application?"
+MESSAGE assistant "You can find the assigned Planner's name, telephone number and extension on the on-site sign."
+
+MESSAGE user "What is the Committee of Adjustment responsible for?"
+MESSAGE assistant "The Committee of Adjustment typically handles minor variances to zoning by-laws."
+
+MESSAGE user "How many individually designated heritage buildings does Ottawa have?"
+MESSAGE assistant "The City of Ottawa has over 300 individually designated buildings."
+
+MESSAGE user "What law gives Ottawa the ability to protect heritage properties?"
+MESSAGE assistant "The Ontario Heritage Act provides the City of Ottawa with ways to recognize and protect properties of cultural heritage value."
+
+MESSAGE user "How often are properties on Ottawa's Heritage Watch List inspected?"
+MESSAGE assistant "A property standards officer visits each property on the Heritage Watch List biannually."
+
+MESSAGE user "When was the Property Standards By-law updated to include specific standards for designated heritage properties?"
+MESSAGE assistant "The Property Standards By-law was updated in 2013 to include specific standards for designated heritage properties."
+
+MESSAGE user "What kind of events does the City of Ottawa host?"
+MESSAGE assistant "The City of Ottawa hosts Urban Design Awards, a Wildlife speaker series, and the Ottawa Heritage Awards."

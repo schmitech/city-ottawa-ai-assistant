@@ -32,7 +32,6 @@ The project uses:
 city-ottawa-ai-assistant/
 ├── train_model.py        # Training script
 ├── merge_model.py        # Merge LoRA weights
-├── convert_to_onnx.py    # Model conversion
 ├── Modelfile            # Ollama configuration
 ├── requirements.txt     # Project dependencies
 └── README.md           # Documentation
@@ -57,6 +56,14 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+First you need to manually add some links in city_ottawa_links.json. The content has to match a specific format.
+
+1. Extract data from the city website:
+```bash
+playwright install 
+python html_scraper.py
+```
+
 ## Model Training and Deployment
 
 1. Train the model:
@@ -69,12 +76,7 @@ python train_model.py
 python merge_model.py
 ```
 
-3. Convert the model:
-```bash
-python convert_to_onnx.py
-```
-
-4. Create Ollama model:
+3. Create Ollama model:
 ```bash
 ollama create ottawa-services -f Modelfile
 ```

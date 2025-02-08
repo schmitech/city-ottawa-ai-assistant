@@ -6,6 +6,17 @@ import asyncio
 from playwright.async_api import async_playwright
 from typing import Dict, List, Any
 from urllib.parse import urljoin
+from google import genai
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+
+# Load URLs from JSON file
+with open('city_of_ottawa_pages.json', 'r') as f:
+    data = json.load(f)
+    urls = data['city_of_ottawa_pages']  # Get the array of URLs
 
 class KnowledgeBaseParser:
     def __init__(self, html_content: str):
@@ -188,90 +199,82 @@ async def fetch_content(url: str) -> str:
         finally:
             await browser.close()
 
-def generate_training_examples(parsed_data: Dict[str, Any]) -> List[Dict[str, str]]:
-    """Generate training examples from parsed data in instruction-response format."""
-    training_examples = []
-    
-    # Generate a high-level overview example
-    overview_example = {
-        "prompt": f"What is {parsed_data['title']}?",
-        "response": ""
-    }
-    
-    # Combine first description from each section for overview
-    descriptions = []
-    for section in parsed_data['sections']:
-        if section['content'] and isinstance(section['content'][0], dict):
-            if 'description' in section['content'][0]:
-                desc = section['content'][0]['description']
-                if desc:
-                    descriptions.append(desc)
-    
-    overview_example["response"] = " ".join(descriptions)
-    if overview_example["response"]:
-        training_examples.append(overview_example)
+def generate_qa_pairs(content: str) -> str:
+    """Use Gemini to generate Q/A pairs from content."""
+    prompt = """Analyze this official documentation and generate realistic user questions with concise answers. 
+Format responses EXACTLY like:
 
-    # Generate section-specific examples
-    for section in parsed_data['sections']:
-        # Question about specific section
-        section_example = {
-            "prompt": f"What are the details about {section['title']} in {parsed_data['title']}?",
-            "response": ""
-        }
-        
-        response_parts = []
-        for content in section['content']:
-            if isinstance(content, dict):
-                if 'description' in content and content['description']:
-                    response_parts.append(content['description'])
-                if 'details' in content and content['details']:
-                    response_parts.extend(content['details'])
-                # Handle table data
-                if 'infractions' in content:
-                    for infraction in content['infractions']:
-                        response_parts.append(
-                            f"Violation: {infraction['violation']}, "
-                            f"Early Payment: ${infraction['early_payment']}, "
-                            f"Set Fine: ${infraction['set_fine']}"
-                        )
-        
-        section_example["response"] = "\n".join(response_parts)
-        if section_example["response"]:
-            training_examples.append(section_example)
+MESSAGE user "[question]"
+MESSAGE assistant "[direct answer]"
 
-    return training_examples
+Requirements:
+1. Answers should be factual and contain only specific information from the content
+2. Never use phrases like "according to documentation" or "City of Ottawa states"
+3. Include exact numbers, dates, or amounts when present in content
+4. Keep answers under 2 sentences
+5. Use natural variations of the same information for different questions"""
 
-def save_training_data(examples: List[Dict[str, str]], output_file: str):
-    """Save training examples to a JSONL file."""
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=[
+            "You are a municipal information extractor creating clean Q/A pairs",
+            prompt,
+            content
+        ]
+    )
+    return response.text
+
+def save_qa_pairs(qa_text: str, output_file: str):
+    """Save Q/A pairs to training file with proper formatting."""
+    print("\nSaving Q/A pairs:")
     with open(output_file, 'a', encoding='utf-8') as f:
-        for example in examples:
-            json.dump(example, f, ensure_ascii=False)
-            f.write('\n')
+        messages = qa_text.strip().split("\n")
+        for i in range(0, len(messages), 2):
+            if i + 1 < len(messages):
+                user_msg = messages[i].strip()
+                assistant_msg = messages[i + 1].strip()
+                
+                # Skip empty messages or invalid formats
+                if not user_msg or not assistant_msg:
+                    continue
+                    
+                # Remove any remaining citations
+                assistant_msg = assistant_msg.replace("According to City of Ottawa documentation", "")
+                assistant_msg = assistant_msg.replace("per City guidelines", "")
+                assistant_msg = re.sub(r'\[.*?\]', '', assistant_msg).strip()
+                
+                # Validate message format
+                if not user_msg.startswith("MESSAGE user") or not assistant_msg.startswith("MESSAGE assistant"):
+                    continue
+                    
+                print(f"\n{user_msg}\n{assistant_msg}")
+                
+                # Write pair to file with single newline between pairs
+                f.write(f"{user_msg}\n{assistant_msg}\n\n")
 
-async def process_url(url: str, output_file: str, training_file: str = None):
-    """Process a URL and save the result as JSON and optionally as training data."""
+async def process_url(url: str, training_file: str):
+    """Process URL and save Q/A pairs to training file."""
+    print(f"\nProcessing URL: {url}")
     try:
-        # Fetch HTML content
-        print(f"Fetching content from {url}")
         html_content = await fetch_content(url)
-
-        # Parse HTML
+        print(f"Successfully fetched HTML content for: {url}")
         parser = KnowledgeBaseParser(html_content)
-        result = parser.parse()
-
-        # Save JSON output
-        with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(result, f, indent=2, ensure_ascii=False)
-            
-        # Generate and save training examples if training_file is provided
-        if training_file:
-            training_examples = generate_training_examples(result)
-            save_training_data(training_examples, training_file)
-            
-        print(f"Successfully processed URL to {output_file}")
-            
+        parsed_data = parser.parse()
+        print(f"Successfully parsed data for: {url}")
+        
+        # Convert parsed data to text for Gemini
+        content_text = json.dumps(parsed_data, indent=2)
+        
+        # Generate and save Q/A pairs
+        qa_text = generate_qa_pairs(content_text)
+        save_qa_pairs(qa_text, training_file)
+        print(f"Successfully generated and saved Q/A pairs for: {url}")
+        
     except Exception as e:
-        print(f"Error processing URL: {str(e)}")
+        print(f"Error processing URL '{url}': {str(e)}")
+        print(f"Error type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
 
 def process_file(input_file: str, output_file: str):
     """Process an HTML file and save the result as JSON."""
@@ -347,41 +350,17 @@ def clean_training_data(input_file: str, output_file: str):
 
 # Main execution
 if __name__ == "__main__":
-    # Read URLs from parking_links.json
-    try:
-        with open('city_of_ottawa_pages.json', 'r') as f:
-            parking_data = json.load(f)
-            urls = parking_data.get('city_of_ottawa_pages', [])
-    except Exception as e:
-        print(f"Error reading parking_links.json: {str(e)}")
-        urls = []
+    print(f"Loaded URLs: {json.dumps(urls, indent=2)}")
+    training_file = "model_training.txt"
+    
+    # Clear existing training file
+    if os.path.exists(training_file):
+        os.remove(training_file)
 
-    output_directory = "./rawdata"
-    
-    # Create the directory if it doesn't exist
-    if not os.path.exists(output_directory):
-        os.makedirs(output_directory)
-        print(f"Created directory: {output_directory}")
-    
-    # Process each URL
+    # Process URLs and generate training data
     async def process_all_urls():
-        training_file = os.path.join(output_directory, "training_data.jsonl")
-        cleaned_training_file = os.path.join(output_directory, "training_data_cleaned.jsonl")
-        
-        # Clear existing training file
-        with open(training_file, 'w', encoding='utf-8') as f:
-            f.write('')
-        
         for url in urls:
-            # Extract the last part of the URL to use as filename
-            filename = url.rstrip('/').split('/')[-1] + '.json'
-            output_file = os.path.join(output_directory, filename)
-            
-            print(f"\nProcessing: {url}")
-            await process_url(url, output_file, training_file)
-        
-        # Clean the training data after processing all URLs
-        clean_training_data(training_file, cleaned_training_file)
-
-    # Run the async function to process all URLs
+            print(f"Processing: {url}")
+            await process_url(url, training_file)
+    
     asyncio.run(process_all_urls())
