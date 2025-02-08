@@ -1,102 +1,55 @@
-# City of Ottawa AI Assistant PoC
+# City of Ottawa AI Assistant
 
-This project creates an AI-powered assistant for the City of Ottawa's website using web scraping and Mistral AI. The assistant helps citizens quickly find information without having to browse through multiple pages.
+This project creates an AI-powered assistant for the City of Ottawa services using Mistral and fine-tuning. The assistant helps citizens quickly find information about city services, business licenses, and recreational programs.
 
 ## Architecture Overview
 
-```mermaid
-sequenceDiagram
-    participant Main
-    participant OttawaSiteScraper
-    participant BeautifulSoup
-    participant Requests
-    participant FileSystem
-    
-    Main->>OttawaSiteScraper: create(base_url="https://ottawa.ca")
-    OttawaSiteScraper->>OttawaSiteScraper: init tokenizer & session
-    
-    Main->>OttawaSiteScraper: crawl(max_pages=500)
-    activate OttawaSiteScraper
-    
-    loop For each unvisited URL (max 100 pages)
-        OttawaSiteScraper->>Requests: GET url
-        Requests-->>OttawaSiteScraper: response
-        
-        OttawaSiteScraper->>BeautifulSoup: parse(response)
-        BeautifulSoup-->>OttawaSiteScraper: soup
-        
-        OttawaSiteScraper->>OttawaSiteScraper: extract_page_content()
-        OttawaSiteScraper->>OttawaSiteScraper: clean_text()
-        OttawaSiteScraper->>OttawaSiteScraper: chunk_content()
-    end
-    deactivate OttawaSiteScraper
-    
-    Main->>OttawaSiteScraper: save_content()
-    activate OttawaSiteScraper
-    
-    OttawaSiteScraper->>FileSystem: save content.json
-    OttawaSiteScraper->>FileSystem: save metadata.csv
-    OttawaSiteScraper->>FileSystem: save training_data.json
-    deactivate OttawaSiteScraper
-    
-    Main->>FileSystem: create_modelfile()
-    FileSystem-->>Main: Modelfile created
-    
-    Note over Main: Setup Complete
-```
-
-## Key Updates
-- **Model Support**: Added Gemma 2B integration alongside Mistral
-- **Enhanced Scraping**: Improved URL filtering and error handling
-- **Safety Features**: Rate limiting and robots.txt compliance
-- **Performance**: Optimized for 500-page crawls in under 15 minutes
-- **Bilingual Support**: French/English content handling
+The project uses:
+- Mistral as the base model
+- LoRA for efficient fine-tuning
+- Ollama for model serving
+- Training data focused on city services
 
 ## Features
 
-- Web scraping of ottawa.ca with intelligent content extraction
-- Token-aware content chunking for optimal training
-- Multiple model support (Mistral, Gemma 2B, Llama2)
-- Bilingual content awareness (English/French)
-- Source URL preservation for verification
-- Professional response formatting suitable for government services
+- Fine-tuned model for Ottawa city services
+- Accurate responses about:
+  - Business licenses and fees
+  - Sports and fitness programs
+  - Older adult activities
+- Professional response formatting
+- Source references in responses
 
 ## Prerequisites
 
-- Python 3.8 or higher
-- Node.js and npm (for the chat interface)
-- Ollama installed on your system ([Ollama Installation Guide](https://github.com/jmorganca/ollama))
+- Python 3.11 or higher
+- Ollama installed ([Ollama Installation Guide](https://github.com/jmorganca/ollama))
+- 16GB RAM minimum
 
 ## Project Structure
 
 ```
-ottawa-ai-assistant/
-├── ottawa_data/          # For storing scraped and generated data
-├── src/
-│   └── ottawa_scraper.py # Main scraping script
-├── requirements.txt      # Project dependencies
-├── venv/                # Virtual environment (git ignored)
-└── .gitignore          # Git ignore file
+city-ottawa-ai-assistant/
+├── train_model.py        # Training script
+├── merge_model.py        # Merge LoRA weights
+├── convert_to_onnx.py    # Model conversion
+├── Modelfile            # Ollama configuration
+├── requirements.txt     # Project dependencies
+└── README.md           # Documentation
 ```
 
 ## Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/schmitech/city-ottawa-ai-assistant.git
+git clone https://github.com/yourusername/city-ottawa-ai-assistant.git
 cd city-ottawa-ai-assistant
 ```
 
 2. Create and activate a virtual environment:
 ```bash
-# Create virtual environment
 python -m venv venv
-
-# Activate virtual environment
-# On Windows:
-venv\Scripts\activate
-# On macOS/Linux:
-source venv/bin/activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
 3. Install dependencies:
@@ -104,209 +57,108 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Model Requirements
-Ensure you have the base models installed:
+## Model Training and Deployment
+
+1. Train the model:
 ```bash
-ollama pull gemma2:9b
+python train_model.py
 ```
 
-## Usage
-
-1. Make sure your virtual environment is activated:
+2. Merge the LoRA weights with base model:
 ```bash
-# Windows
-venv\Scripts\activate
-# macOS/Linux
-source venv/bin/activate
+python merge_model.py
 ```
 
-2. Run the scraper:
+3. Convert the model:
 ```bash
-python src/ottawa_scraper.py
+python convert_to_onnx.py
 ```
 
-This will:
-- Crawl the City of Ottawa website
-- Extract and process content
-- Create training data
-- Generate a Modelfile for Mistral
-
-3. Build the custom model:
+4. Create Ollama model:
 ```bash
-ollama create ottawa-gemma -f ottawa_data/Modelfile
+ollama create ottawa-services -f Modelfile
 ```
 
-4. Set up the chat interface:
+## Using the Model
+
+1. Start a conversation:
 ```bash
-git clone https://github.com/schmitech/ollama-chat
-cd ollama-chat
-npm install
-npm run dev
+ollama run ottawa-services "What is Business licences?"
 ```
 
-## Configuration Tips
-- Adjust `max_pages` in config.yaml for different crawl sizes
-- Modify model parameters under `model.parameters`
-- Update excluded patterns to filter unwanted content
-- Set `request_delay` between 0.5-2.0 seconds for safety
+2. Run in chat mode:
+```bash
+ollama run ottawa-services
+```
+
+## Model Configuration
+
+The Modelfile contains:
+- Base model configuration (using Mistral)
+- Temperature and other generation parameters
+- Prompt templates
+- System instructions
+- Example conversations for few-shot learning
+
+Example Modelfile structure:
+```modelfile
+FROM mistral:latest
+
+# Model parameters
+PARAMETER temperature 0.7
+PARAMETER top_p 0.95
+PARAMETER top_k 40
+PARAMETER repeat_penalty 1.1
+
+# Prompt template
+TEMPLATE """### Instruction: {{ .Prompt }}
+
+### Response: """
+
+# System instructions and example conversations
+SYSTEM """You are an AI assistant trained to help with information about City of Ottawa services..."""
+```
 
 ## Sample Queries
 
-After setting up the chat interface, try these example queries:
+Try these example queries:
 
 ```
-# City Services & Programs
-"What are the current recreation program registration dates?"
-"How do I apply for a residential parking permit?"
-"What documents do I need for a marriage license?"
+# Business Licenses
+"How do I apply for a business licence in Ottawa?"
+"What is the cost of a kennel licence?"
+"What businesses require municipal licenses?"
 
-# Waste & Recycling
-"When is my next garbage collection day?"
-"What items are accepted at the Trail Road waste facility?"
-"How do I dispose of household hazardous waste?"
-
-# Property & Development
-"What are the current property tax payment deadlines?"
-"How do I contest a parking ticket?"
-"What permits do I need to renovate my bathroom?"
-
-# Parks & Recreation
-"Which city pools offer swimming lessons?"
-"How can I reserve a park pavilion?"
-"What are the winter skating rink locations?"
-
-# Public Health & Safety
-"Where are the nearest COVID-19 testing centers?"
-"How do I report a bylaw violation?"
-"What are the current snow removal standards?"
-
-# Bilingual Services
-"Quels services sont disponibles en français?"
-"Where can I get city services in French?"
-"Comment puis-je obtenir des documents municipaux en français?"
+# Recreation Programs
+"What is the Heart Wise Exercise program?"
+"How much do tennis courts cost?"
+"How can I get a free fitness pass?"
 ```
-
-Each query is designed to return specific, actionable information with relevant URLs and contact details when available.
-
-## Output Files
-
-The scraper generates several files in the `ottawa_data` directory:
-
-- `content.json`: Raw extracted content from the website
-- `metadata.csv`: Site structure and metadata information
-- `training_data.json`: Processed training examples for the model
-- `Modelfile`: Configuration file for creating the AI model
-
-## Model Features
-
-The AI assistant:
-- Provides accurate information from the City of Ottawa website
-- Includes source URLs for verification
-- Maintains a professional yet approachable tone
-- Handles both English and French service information
-- Suggests relevant contact information when appropriate
-- Supports multiple AI models (Mistral, Gemma 2B)
-- Automatically stops after configured page limit
-
-## Development
-
-To contribute to this project:
-
-1. Fork the repository
-2. Create a feature branch:
-```bash
-git checkout -b feature/your-feature-name
-```
-3. Make your changes and commit:
-```bash
-git commit -am 'Add some feature'
-```
-4. Push to the branch:
-```bash
-git push origin feature/your-feature-name
-```
-5. Submit a pull request
-
-## Customization
-
-You can modify the script behavior by adjusting these parameters:
-
-- `max_pages`: Number of pages to crawl (default: 500)
-- `num_ctx`: Context window size for Mistral (default: 4096)
-- `temperature`: Model creativity (default: 0.7)
-- Other parameters in the Modelfile
-
-## Dependencies
-
-Main dependencies include:
-- beautifulsoup4: Web scraping
-- requests: HTTP requests
-- pandas: Data processing
-- tiktoken: Token-aware content chunking
-- tqdm: Progress bars
-
-## Notes
-
-- The scraper respects website structure and avoids overloading the server
-- Content is cleaned and normalized for better training
-- The model is optimized for municipal service queries
-- All source URLs are preserved for verification
-
-## Data Synchronization
-
-The project includes an automated synchronization system to keep the AI assistant's knowledge up-to-date with the website content.
-
-### Sync Features
-
-1. **Efficient Change Detection**
-- Uses HTTP headers (Last-Modified, ETag) to check for changes
-- Content hashing to detect actual content modifications
-- Only processes pages that have been modified
-- Minimizes unnecessary processing and server load
-
-2. **Automated Synchronization Process**
-```bash
-# Run manual sync
-python src/ottawa_sync.py
-
-# Set up automatic daily sync (cron job)
-0 2 * * * cd /path/to/ottawa-ai-assistant && ./venv/bin/python src/ottawa_sync.py
-```
-
-3. **Smart Resource Usage**
-- Implements incremental updates instead of full reprocessing
-- Respects server resources with controlled request rates
-- Maintains a cache of previous states to optimize performance
-
-4. **Monitoring and Reporting**
-- Detailed logging of all changes
-- Tracks new, updated, and removed pages
-- Email notifications for significant changes (configurable)
-
-5. **Error Handling and Reliability**
-- Robust error handling for network issues
-- Automatic retries for failed requests
-- Preservation of existing data if updates fail
-
-### Sync Process
-
-The synchronization process:
-1. Checks for modified pages using HTTP headers
-2. Downloads and processes only changed content
-3. Updates the model only when changes are detected
-4. Maintains detailed logs of all updates
 
 ## Limitations
 
-- Only crawls public-facing content
-- Requires Ollama to be installed separately
-- Limited to content available on ottawa.ca
-- Maximum 500 pages per crawl (configurable)
-- Focused on recreation services (configurable)
+- Limited to trained topics (business licenses, recreation programs)
+- Requires Ollama to be installed
+- CPU-only training and inference
+- Response time varies based on hardware
 
-## Contributing
+## Troubleshooting
 
-Contributions are welcome! Please read the contributing guidelines before making any changes.
+Common issues and solutions:
+1. Memory errors during training:
+   - Reduce batch size in train_model.py
+   - Close other applications
+   - Use CPU-only training mode
+
+2. Conversion issues:
+   - Ensure all dependencies are installed
+   - Check available disk space
+   - Verify model files are complete
+
+3. Ollama integration:
+   - Verify Ollama is running
+   - Check Modelfile syntax
+   - Ensure base model is downloaded
 
 ## License
 
@@ -315,7 +167,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Acknowledgments
 
 - [Ollama](https://github.com/jmorganca/ollama) for the model serving infrastructure
-- [Ollama Chat](https://github.com/schmitech/ollama-chat) for the chat interface
 - Mistral AI for the base model
 
 ## Support

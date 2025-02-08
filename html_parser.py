@@ -188,8 +188,68 @@ async def fetch_content(url: str) -> str:
         finally:
             await browser.close()
 
-async def process_url(url: str, output_file: str):
-    """Process a URL and save the result as JSON."""
+def generate_training_examples(parsed_data: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Generate training examples from parsed data in instruction-response format."""
+    training_examples = []
+    
+    # Generate a high-level overview example
+    overview_example = {
+        "prompt": f"What is {parsed_data['title']}?",
+        "response": ""
+    }
+    
+    # Combine first description from each section for overview
+    descriptions = []
+    for section in parsed_data['sections']:
+        if section['content'] and isinstance(section['content'][0], dict):
+            if 'description' in section['content'][0]:
+                desc = section['content'][0]['description']
+                if desc:
+                    descriptions.append(desc)
+    
+    overview_example["response"] = " ".join(descriptions)
+    if overview_example["response"]:
+        training_examples.append(overview_example)
+
+    # Generate section-specific examples
+    for section in parsed_data['sections']:
+        # Question about specific section
+        section_example = {
+            "prompt": f"What are the details about {section['title']} in {parsed_data['title']}?",
+            "response": ""
+        }
+        
+        response_parts = []
+        for content in section['content']:
+            if isinstance(content, dict):
+                if 'description' in content and content['description']:
+                    response_parts.append(content['description'])
+                if 'details' in content and content['details']:
+                    response_parts.extend(content['details'])
+                # Handle table data
+                if 'infractions' in content:
+                    for infraction in content['infractions']:
+                        response_parts.append(
+                            f"Violation: {infraction['violation']}, "
+                            f"Early Payment: ${infraction['early_payment']}, "
+                            f"Set Fine: ${infraction['set_fine']}"
+                        )
+        
+        section_example["response"] = "\n".join(response_parts)
+        if section_example["response"]:
+            training_examples.append(section_example)
+
+    return training_examples
+
+def save_training_data(examples: List[Dict[str, str]], output_file: str):
+    """Save training examples to a JSONL file."""
+    with open(output_file, 'a', encoding='utf-8') as f:
+        for example in examples:
+            json.dump(example, f, ensure_ascii=False)
+            f.write('\n')
+
+async def process_url(url: str, output_file: str, training_file: str = None):
+    """Process a URL and save the result as JSON and optionally as training data."""
     try:
         # Fetch HTML content
         print(f"Fetching content from {url}")
@@ -202,6 +262,11 @@ async def process_url(url: str, output_file: str):
         # Save JSON output
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(result, f, indent=2, ensure_ascii=False)
+            
+        # Generate and save training examples if training_file is provided
+        if training_file:
+            training_examples = generate_training_examples(result)
+            save_training_data(training_examples, training_file)
             
         print(f"Successfully processed URL to {output_file}")
             
@@ -228,6 +293,58 @@ def process_file(input_file: str, output_file: str):
     except Exception as e:
         print(f"Error processing file: {str(e)}")
 
+def clean_training_data(input_file: str, output_file: str):
+    """Clean training data by removing low-quality entries."""
+    cleaned_examples = []
+    
+    def is_valid_example(example: Dict[str, str]) -> bool:
+        """Check if an example meets quality criteria."""
+        # Check if response is too short
+        if len(example['response'].strip()) < 20:
+            return False
+            
+        # Check if response contains incomplete sentences or lists
+        if example['response'].strip().endswith(('...', ',')):
+            return False
+            
+        # Check if response is just a list of links
+        if example['response'].count('(link is external)') > 3:
+            return False
+            
+        # Check if response is mostly repeated content
+        lines = example['response'].split('\n')
+        unique_lines = set(lines)
+        if len(lines) > 10 and len(unique_lines) < len(lines) * 0.5:
+            return False
+            
+        # Check if response contains actual content (not just navigation elements)
+        if all(line.startswith(('Browse ', 'View ', 'Register ')) for line in lines if line.strip()):
+            return False
+            
+        return True
+
+    try:
+        # Read existing examples
+        with open(input_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                try:
+                    example = json.loads(line.strip())
+                    if is_valid_example(example):
+                        cleaned_examples.append(example)
+                except json.JSONDecodeError:
+                    continue
+        
+        # Write cleaned examples
+        with open(output_file, 'w', encoding='utf-8') as f:
+            for example in cleaned_examples:
+                json.dump(example, f, ensure_ascii=False)
+                f.write('\n')
+                
+        print(f"Cleaned training data: {len(cleaned_examples)} examples retained")
+        
+    except Exception as e:
+        print(f"Error cleaning training data: {str(e)}")
+
 # Main execution
 if __name__ == "__main__":
     # Read URLs from parking_links.json
@@ -248,13 +365,23 @@ if __name__ == "__main__":
     
     # Process each URL
     async def process_all_urls():
+        training_file = os.path.join(output_directory, "training_data.jsonl")
+        cleaned_training_file = os.path.join(output_directory, "training_data_cleaned.jsonl")
+        
+        # Clear existing training file
+        with open(training_file, 'w', encoding='utf-8') as f:
+            f.write('')
+        
         for url in urls:
             # Extract the last part of the URL to use as filename
             filename = url.rstrip('/').split('/')[-1] + '.json'
             output_file = os.path.join(output_directory, filename)
             
             print(f"\nProcessing: {url}")
-            await process_url(url, output_file)
+            await process_url(url, output_file, training_file)
+        
+        # Clean the training data after processing all URLs
+        clean_training_data(training_file, cleaned_training_file)
 
     # Run the async function to process all URLs
     asyncio.run(process_all_urls())
